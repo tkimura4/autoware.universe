@@ -1,0 +1,25 @@
+<launch>
+  <arg name="adaptive_cruise_control_param_path" default="$(find-pkg-share adaptive_cruise_controller)/config/adaptive_cruise_control.param.yaml" />
+
+  <!-- vehicle info -->
+  <arg name="vehicle_info_param_file" default="$(find-pkg-share vehicle_info_util)/config/vehicle_info.param.yaml" />
+
+  <arg name="input_objects" default="/perception/object_recognition/objects" />
+  <arg name="input_pointcloud" default="input/pointcloud" />
+  <arg name="input_trajectory" default="input/trajectory" />
+  <arg name="input_odometry" default="/localization/kinematic_state" />
+  <arg name="output_trajectory" default="output/trajectory" />
+
+  <node pkg="adaptive_cruise_controller" exec="adaptive_cruise_controller" name="adaptive_cruise_controller" output="screen">
+    <!-- load config files -->
+    <param from="$(var obstacle_stop_planner_param_path)" />
+    <param from="$(var vehicle_info_param_file)" />
+    <!-- remap topic name -->
+    <remap from="~/output/stop_reasons" to="/planning/scenario_planning/status/stop_reasons" />
+    <remap from="~/output/trajectory" to="$(var output_trajectory)" />
+    <remap from="~/input/objects" to="$(var input_objects)" />
+    <remap from="~/input/trajectory" to="$(var input_trajectory)" />
+    <remap from="~/input/odometry" to="$(var input_odometry)" />
+  </node>
+
+</launch>

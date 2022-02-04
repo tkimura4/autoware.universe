@@ -1,0 +1,4 @@
+/**:
+  ros__parameters:
+    adaptive_cruise_object_velocity: 3.0 # if object velocity is higher than this value, the mode changes from STOP to ACC
+    stop_object_velocity: 2.0 # if object velocity is lower than this value, the mode changes from ACC to STOP
