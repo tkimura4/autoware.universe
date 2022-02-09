@@ -74,17 +74,24 @@ void AdaptiveCruiseControllerNode::onTrajectory(const Trajectory::ConstSharedPtr
     pub_trajectory_->publish(*msg);
   }
 
-  // create rough polygon
+  // create rough detection area
   std::vector<Polygon2d> rough_detection_area;
   createPolygonFromTrajectoryPoints(
     decimate_trajectory, param_.rough_detection_area_expand_length, rough_detection_area);
   // extract objects in rough detection area
   PredictedObjects objects_in_rough_detection_area;
-  extractObjectsinPolygon(*current_objects_ptr_, objects_in_rough_detection_area);
+  extractObjectsInPolygon(
+    *current_objects_ptr_, rough_detection_area, objects_in_rough_detection_area);
+
+  // create detection area
+  std::vector<Polygon2d> detection_area;
+  createPolygonFromTrajectoryPoints(
+    decimate_trajectory, param_.detection_area_expand_length, detection_area);
 
   // extract target objects of adaptive cruise controller
   PredictedObjects target_objects;
-  getTargetObjects(objects_in_rough_detection_area, target_objects);
+  getTargetObjects(
+    objects_in_rough_detection_area, detection_area, decimate_trajectory, target_objects);
 
   if (target_objects.objects.empty()) {
     // no target object
@@ -93,7 +100,7 @@ void AdaptiveCruiseControllerNode::onTrajectory(const Trajectory::ConstSharedPtr
 
   // get nearest object from target object
   PredictedObject nearest_target_object;
-  getNearestObject(target_objects, nearest_target_object);
+  getNearestObject(target_objects, decimate_trajectory, nearest_target_object);
 
   // send velocity / insert velocity to trajectory
   Trajectory output;
@@ -217,29 +224,72 @@ void AdaptiveCruiseControllerNode::createPolygonFromTrajectoryPoints(
   }
 }
 
-void extractObjectsinPolygon(
-  const PredictedObjects & objects, PredictedObjects & objects_in_polygon)
+void AdaptiveCruiseControllerNode::extractObjectsInPolygon(
+  const PredictedObjects & objects, const std::vector<Polygon2d> & target_polygons,
+  PredictedObjects & objects_in_polygon)
 {
-  // TODO
+  objects_in_polygon.header = objects.header;
+  for (const auto object : objects.objects) {
+    Polygon2d object_polygon;
+    convertObjectToBoostPolygon(object, object_polygon);
+    if (isObjectWithinPolygon(target_polygons, object_polygon)) {
+      objects_in_polygon.objects.emplace_back(object);
+    }
+  }
 }
 
-void getTargetObjects(const PredictedObjects & objects, PredictedObjects & target_objects)
+void AdaptiveCruiseControllerNode::getTargetObjects(
+  const PredictedObjects & objects, const std::vector<Polygon2d> & target_polygons,
+  const TrajectoryPoints & target_trajectory, PredictedObjects & target_objects)
 {
-  // TODO
-  // if target is in detection area & diff angle with trajectory is low(30deg)? -> true
+  target_objects.header = objects.header;
 
-  // false then,
+  for (const auto object : objects.objects) {
+    // check if the object is in the target area
+    // and if the object angle is aligned with the trajectory angle.
+    Polygon2d object_polygon;
+    convertObjectToBoostPolygon(object, object_polygon);
+    bool object_in_target_area = isObjectWithinPolygon(target_polygons, object_polygon);
+    bool align_object_angle = isAngleAlignedWithTrajectory(
+      getObjectPose(object), target_trajectory, param_.object_threshold_angle);
+    if (object_in_target_area && align_object_angle) {
+      target_objects.objects.emplace_back(object);
+      continue;
+    }
 
-  // if velocity is high and predicted path is near the trajectory and diff angle with trajectory is
-  // low(5deg)?
+    // check if the object velocity is high
+    // and if the predicted_path and trajectory overlap for a certain period of time.
+    bool object_velocity_high = isObjectVelocityHigh(object);
+    double threshold_dist_of_path_and_trajectory = vehicle_info_.vehicle_width_m / 2.0 +
+                                                   object.shape.dimensions.y / 2.0 +
+                                                   param_.detection_area_expand_length;
+    bool overlap_predicted_path_with_trajectory = isPathNearTrajectory(
+      getHighestConfidencePathFromObject(object), target_trajectory,
+      threshold_dist_of_path_and_trajectory, param_.predicted_path_threshold_angle);
+    if (object_velocity_high && overlap_predicted_path_with_trajectory) {
+      target_objects.objects.emplace_back(object);
+      continue;
+    }
+  }
 }
 
-void getNearestObject(const PredictedObjects & objects, PredictedObject & nearest_object)
+void AdaptiveCruiseControllerNode::getNearestObject(
+  const PredictedObjects & objects, const TrajectoryPoints & trajectory_points,
+  PredictedObject & nearest_object)
 {
-  // TODO
-  // calc distance to object using trajectory
-  // hear, rough distance is calculted by object-center-position.
-  // (object-corner is not used here.)
+  double minimum_length_to_object = std::numeric_limits<double>::max();
+
+  for (const auto object : objects.objects) {
+    const auto object_point = object.kinematics.initial_pose_with_covariance.pose.position;
+
+    const auto length_to_object = tier4_autoware_utils::calcSignedArcLength(
+      trajectory_points, current_pose_->pose.position, object_point);
+
+    if (length_to_object < minimum_length_to_object) {
+      minimum_length_to_object = length_to_object;
+      nearest_object = object;
+    }
+  }
 }
 
 void AdaptiveCruiseControllerNode::convexHull(
@@ -272,17 +322,119 @@ void AdaptiveCruiseControllerNode::convexHull(
   }
 }
 
-bool AdaptiveCruiseControllerNode::withinPolygon(
-  const std::vector<Polygon2d> & trajectory_polygons, const Polygon2d & object_polygon)
+bool AdaptiveCruiseControllerNode::isObjectWithinPolygon(
+  const std::vector<Polygon2d> & target_polygons, const Polygon2d & object_polygon,
+  const double overlap_threshold)
 {
-  Polygon2d boost_trajectory_polygon;
+  Polygon2d boost_target_polygon;
 
-  for (const auto & trajectory_polygon : trajectory_polygons) {
-    if (bg::within(trajectory_polygon, object_polygon)) {
+  for (const auto & target_polygon : target_polygons) {
+    std::vector<Polygon2d> overlap_polygons;
+    bg::intersection(target_polygon, object_polygon, overlap_polygons);
+    double overlap_polygon_area = 0.0;
+    for (const auto overlap_polygon : overlap_polygons) {
+      overlap_polygon_area += bg::area(overlap_polygon);
+    }
+
+    const double overlap_area_rate = overlap_polygon_area / bg::area(object_polygon);
+
+    if (overlap_area_rate > overlap_threshold) {
       return true;
     }
   }
   return false;
+}
+
+PredictedPath AdaptiveCruiseControllerNode::getHighestConfidencePathFromObject(
+  const PredictedObject & object)
+{
+  double highest_confidence = 0;
+  PredictedPath highest_confidence_path;
+
+  for (const auto path : object.kinematics.predicted_paths) {
+    if (highest_confidence < path.confidence) {
+      highest_confidence = path.confidence;
+      highest_confidence_path = path;
+    }
+  }
+  return highest_confidence_path;
+}
+
+geometry_msgs::msg::Pose AdaptiveCruiseControllerNode::getObjectPose(const PredictedObject & object)
+{
+  if (object.kinematics.initial_twist_with_covariance.twist.linear.x >= 0) {
+    return object.kinematics.initial_pose_with_covariance.pose;
+  }
+
+  // If the object velocity is negative, invert yaw-angle
+  auto obj_pose = object.kinematics.initial_pose_with_covariance.pose;
+  double yaw, pitch, roll;
+  tf2::getEulerYPR(obj_pose.orientation, yaw, pitch, roll);
+  tf2::Quaternion inv_q;
+  inv_q.setRPY(roll, pitch, yaw + M_PI);
+  obj_pose.orientation = tf2::toMsg(inv_q);
+  return obj_pose;
+}
+
+bool AdaptiveCruiseControllerNode::isObjectVelocityHigh(const PredictedObject & object)
+{
+  const auto object_velocity = object.kinematics.initial_twist_with_covariance.twist.linear.x;
+  return object_velocity > acc_param_.object_low_velocity_thresh;
+}
+
+bool AdaptiveCruiseControllerNode::isAngleAlignedWithTrajectory(
+  const geometry_msgs::msg::Pose & pose, const TrajectoryPoints & trajectory_points,
+  const double threshold_angle)
+{
+  const auto nearest_index = tier4_autoware_utils::findNearestIndex(trajectory_points, pose);
+  if (!nearest_index) {
+    return false;
+  }
+
+  const auto pose_angle = tf2::getYaw(pose.orientation);
+  const auto trajectory_angle = tf2::getYaw(trajectory_points.at(*nearest_index).pose.orientation);
+
+  const auto diff_angle = tier4_autoware_utils::normalizeRadian(pose_angle - trajectory_angle);
+
+  return std::fabs(diff_angle) <= threshold_angle;
+}
+
+bool AdaptiveCruiseControllerNode::isPoseNearTrajectory(
+  const geometry_msgs::msg::Pose & pose, const TrajectoryPoints & trajectory_points,
+  const double threshold_dist, const double threshold_angle)
+{
+  return static_cast<bool>(tier4_autoware_utils::findNearestIndex(
+    trajectory_points, pose, threshold_dist, threshold_angle));
+}
+
+bool AdaptiveCruiseControllerNode::isPathNearTrajectory(
+  const PredictedPath & path, const TrajectoryPoints & trajectory_points,
+  const double threshold_dist, const double threshold_angle)
+{
+  std::vector<size_t> overlap_path_point_index_que;
+  for (size_t i = 0; i < path.path.size(); i++) {
+    const auto path_pose = path.path.at(i);
+    if (isPoseNearTrajectory(path_pose, trajectory_points, threshold_dist, threshold_angle)) {
+      overlap_path_point_index_que.emplace_back(i);
+    }
+  }
+
+  if (overlap_path_point_index_que.size() < 2) {
+    // overlap path is too short.
+    return false;
+  }
+
+  const double timespan_of_overlap_path_point =
+    static_cast<double>(
+      (overlap_path_point_index_que.back() - overlap_path_point_index_que.front())) *
+    rclcpp::Duration(path.time_step).seconds();
+
+  if (timespan_of_overlap_path_point < param_.mininum_overlap_time_of_predicted_path) {
+    // overlap time of path and trajectory is too short.
+    return false;
+  }
+
+  return true;
 }
 
 void AdaptiveCruiseControllerNode::convertObjectToBoostPolygon(

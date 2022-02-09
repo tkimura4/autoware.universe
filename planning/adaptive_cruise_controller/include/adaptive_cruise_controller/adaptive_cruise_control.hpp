@@ -42,6 +42,7 @@ namespace motion_planning
 namespace bg = boost::geometry;
 using autoware_auto_perception_msgs::msg::PredictedObject;
 using autoware_auto_perception_msgs::msg::PredictedObjects;
+using autoware_auto_perception_msgs::msg::PredictedPath;
 using autoware_auto_planning_msgs::msg::Trajectory;
 using autoware_auto_planning_msgs::msg::TrajectoryPoint;
 using tier4_planning_msgs::msg::VelocityLimit;
@@ -68,6 +69,18 @@ private:
 
     // length to expand rough detection area
     double rough_detection_area_expand_length;
+
+    // length to expand detection area
+    double detection_area_expand_length;
+
+    // minimum diff-angle between object and trajectory to be considered as a target objects
+    double object_threshold_angle;
+
+    // minimum diff-angle between preidcted_path and trajectory to be considered as a target objects
+    double predicted_path_threshold_angle;
+
+    // minimum overlap time of predicted path and trajectory to be considered as a target objects
+    double mininum_overlap_time_of_predicted_path;
   };
   Param param_;
 
@@ -93,22 +106,40 @@ private:
   void createPolygonFromTrajectoryPoints(
     const TrajectoryPoints & trajectory_points, const double expand_width,
     std::vector<Polygon2d> & polygon);
-  void extractObjectsinPolygon(
-    const PredictedObjects & objects, PredictedObjects & objects_in_polygon);
-  void getTargetObjects(const PredictedObjects & objects, PredictedObjects & target_objects);
-  void getNearestObject(const PredictedObjects & objects, PredictedObject & nearest_object);
+  void extractObjectsInPolygon(
+    const PredictedObjects & objects, const std::vector<Polygon2d> & target_polygons,
+    PredictedObjects & objects_in_polygon);
+  void getTargetObjects(
+    const PredictedObjects & objects, const std::vector<Polygon2d> & target_polygons,
+    const TrajectoryPoints & target_trajectory, PredictedObjects & target_objects);
+  void getNearestObject(
+    const PredictedObjects & objects, const TrajectoryPoints & trajectory_points,
+    PredictedObject & nearest_object);
   VelocityLimit createVelocityLimitMsg(
     const double velocity, const double acceleration, const double jerk);
   VelocityLimitClearCommand createVelocityLimitClearCommandMsg();
 
   void convexHull(
     const std::vector<cv::Point2d> & points, std::vector<cv::Point2d> & polygon_points);
-  bool withinPolygon(
-    const std::vector<Polygon2d> & trajectory_polygons, const Polygon2d & object_polygon);
+  bool isObjectWithinPolygon(
+    const std::vector<Polygon2d> & target_polygons, const Polygon2d & object_polygon,
+    const double overlap_threshold = 0.1);
+  bool isAngleAlignedWithTrajectory(
+    const geometry_msgs::msg::Pose & pose, const TrajectoryPoints & trajectory_points,
+    const double threshold_angle);
+  bool isPoseNearTrajectory(
+    const geometry_msgs::msg::Pose & pose, const TrajectoryPoints & trajectory_points,
+    const double threshold_dist, const double threshold_angle);
+  bool isPathNearTrajectory(
+    const PredictedPath & path, const TrajectoryPoints & trajectory_points,
+    const double threshold_dist, const double threshold_angle);
+  PredictedPath getHighestConfidencePathFromObject(const PredictedObject & object);
+  geometry_msgs::msg::Pose getObjectPose(const PredictedObject & object);
+  bool isObjectVelocityHigh(const PredictedObject & object);
+
   void convertObjectToBoostPolygon(const PredictedObject & object, Polygon2d object_polygon);
   void convertcvPointsToBoostPolygon(
     const std::vector<cv::Point2d> & points, Polygon2d object_polygon);
-
   bool isClockWise(const Polygon2d & polygon);
   Polygon2d inverseClockWise(const Polygon2d & polygon);
 
