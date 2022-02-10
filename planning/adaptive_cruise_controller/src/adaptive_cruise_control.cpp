@@ -57,12 +57,11 @@ void AdaptiveCruiseControllerNode::onTrajectory(const Trajectory::ConstSharedPtr
     return;
   }
 
-  TrajectoryPoints output_trajectory_points =
-    tier4_autoware_utils::convertToTrajectoryPointArray(*msg);
+  TrajectoryPoints trajectory_points = tier4_autoware_utils::convertToTrajectoryPointArray(*msg);
 
   // trim trajectory from self pose
   const auto base_trajectory =
-    trimTrajectoryWithIndexFromSelfPose(output_trajectory_points, *current_pose_);
+    trimTrajectoryWithIndexFromSelfPose(trajectory_points, *current_pose_);
   // extend trajectory to consider objects after the goal
   const auto extend_trajectory = extendTrajectory(base_trajectory, param_.trajectory_extend_length);
   // decimate trajectory for calculation cost
@@ -103,12 +102,13 @@ void AdaptiveCruiseControllerNode::onTrajectory(const Trajectory::ConstSharedPtr
   getNearestObject(target_objects, decimate_trajectory, nearest_target_object);
 
   // send velocity / insert velocity to trajectory
-  Trajectory output;
+  TrajectoryPoints output;
   {
     // get information for adaptive cruise control
     const auto object_time = rclcpp::Time(target_objects.header.stamp);
-    controller_ptr_->getInformationForAdaptiveCruise(
-      *msg, *current_pose_, *current_odometry_ptr_, nearest_target_object, object_time);
+    controller_ptr_->calcInformationForAdaptiveCruise(
+      trajectory_points, *current_pose_, *current_odometry_ptr_, nearest_target_object,
+      object_time);
 
     // calculate target motion (target_velocity, and trajectory)
     controller_ptr_->calculate();
@@ -128,7 +128,9 @@ void AdaptiveCruiseControllerNode::onTrajectory(const Trajectory::ConstSharedPtr
   }
 
   // publish trajectory
-  pub_trajectory_->publish(output);
+  auto output_trajectory = tier4_autoware_utils::convertToTrajectory(output);
+  output_trajectory.header = msg->header;
+  pub_trajectory_->publish(output_trajectory);
 }
 
 void AdaptiveCruiseControllerNode::onOdometry(const Odometry::ConstSharedPtr msg)
@@ -174,6 +176,7 @@ VelocityLimit AdaptiveCruiseControllerNode::createVelocityLimitMsg(
   msg.use_constraints = true;
   msg.constraints.min_acceleration = std::min(0.0, acceleration);
   msg.constraints.min_jerk = std::min(0.0, jerk);
+  msg.constraints.max_jerk = -msg.constraints.min_jerk;
   return msg;
 }
 

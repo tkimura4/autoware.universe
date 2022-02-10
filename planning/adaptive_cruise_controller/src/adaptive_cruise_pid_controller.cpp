@@ -24,12 +24,62 @@ AdaptiveCruisePIDController::AdaptiveCruisePIDController(
   // TODO
 }
 
-void AdaptiveCruisePIDController::getInformationForAdaptiveCruise(
-  const Trajectory & trajectory, const geometry_msgs::msg::PoseStamped & pose,
-  const Odometry & odometry, const PredictedObject & object)
+void AdaptiveCruisePIDController::calcInformationForAdaptiveCruise(
+  const TrajectoryPoints & trajectory_points, const geometry_msgs::msg::PoseStamped & pose,
+  const Odometry & odometry, const PredictedObject & object, const rclcpp::Time & object_time)
 {
-  // TODO
-  // using dt ( = object_timestamp - pose_timstamp), do time compensation for object position
+  const auto object_pose = object.kinematics.initial_pose_with_covariance.pose;
+  const double object_velocity = object.kinematics.initial_twist_with_covariance.twist.linear.x;
+  double object_diff_angle = 0.0;
+  getDiffAngleWithTrajectory(object_pose, trajectory_points, object_diff_angle);
+
+  /* calculate the object velocity along trajectory */
+  const double object_velocity_along_traj = object_velocity * std::cos(object_diff_angle);
+
+  /* calculate distance to object */
+  // calculate raw distance to the center-position of object from the base_link of ego-car
+  double dist_to_object = tier4_autoware_utils::calcSignedArcLength(
+    trajectory_points, pose.pose.position, object_pose.position);
+
+  // considering the size of ego-car and object
+  dist_to_object -= (baselink2front_ + object.shape.dimensions.x / 2.0);
+
+  // delay compensation ( add object's travling distance in the delay time )
+  const double delay_time = (rclcpp::Time(pose.header.stamp) - object_time).seconds();
+  const double running_distance_in_delay = delay_time * object_velocity_along_traj;
+  dist_to_object += running_distance_in_delay;
+
+  /* input acc information */
+  acc_info_ptr_ = std::make_shared<AdaptiveCruiseInformation>();
+  acc_info_ptr_->current_distance_to_object = dist_to_object;
+  acc_info_ptr_->current_ego_velocity = odometry.twist.twist.linear.x;
+  acc_info_ptr_->current_object_velocity = object_velocity_along_traj;
+  acc_info_ptr_->ideal_distance_to_object =
+    getIdealDistanceToObject(odometry.twist.twist.linear.x, object_velocity_along_traj);
+  acc_info_ptr_->info_time = rclcpp::Time(pose.header.stamp);
+  acc_info_ptr_->original_trajectory = trajectory_points;
+}
+
+double AdaptiveCruisePIDController::getIdealDistanceToObject(
+  const double current_velocity, const double object_velocity)
+{
+  // ego current velocity ... v_ego
+  // ego minimum deceleration ... a_ego
+  // object velocity ... v_obj
+  // object minimum deceleration ... a_obj
+  // idling_time ... t_idling
+  // ideal_distance ... D
+  // minimum_margin_distance ... d_margin
+  // D = d_margin + v_e * t_idling + v_ego^2/(2*|a_ego|) - v_obj^2/(2*|a_obj|)
+
+  const double margin_distance = acc_param_.minimum_margin_distance;
+  const double idle_traving_distance = current_velocity * acc_param_.idling_time;
+  const double ego_braking_distance =
+    (current_velocity * current_velocity) / (2.0 * std::fabs(acc_param_.acc_min_acceleration));
+  const double object_braking_distance =
+    (object_velocity * object_velocity) / (2.0 * std::fabs(acc_param_.object_min_acceleration));
+
+  return margin_distance + idle_traving_distance + ego_braking_distance - object_braking_distance;
 }
 
 void AdaptiveCruisePIDController::calculate()
@@ -51,21 +101,33 @@ void AdaptiveCruisePIDController::calculate()
 
 void AdaptiveCruisePIDController::calcTrajectoryWithStopPoints()
 {
-  // TODO(insert Stop Velocity to Trajectory)
-  /*
-  double stop_dist = acc_info_ptr_->current_distance_to_object;
-  double minimum_stop_dist_with_acc_limit = calcStopDistance(acc_param_.stop_min_acceleration);
-  if (stop_dist > minimum_stop_dist_with_acc_limit) {
-    stop_dist = minimum_stop_dist_with_acc_limit;
+  const double original_stop_dist =
+    acc_info_ptr_->current_distance_to_object - acc_param_.minimum_margin_distance;
+  const double min_stop_dist = calcStoppingDistFromCurrentVel(acc_info_ptr_->current_ego_velocity);
+
+  double target_stop_dist;
+  if (original_stop_dist >= min_stop_dist) {
+    target_stop_dist = original_stop_dist;
+    acc_motion_.emergency = false;
+  } else {
+    target_stop_dist = min_stop_dist;
     acc_motion_.emergency = true;
   }
-  acc_motion_.planned_trajectory = insertStopVelocity(stop_dist);
-  */
+
+  acc_motion_.planned_trajectory =
+    insertStopPoint(target_stop_dist, acc_info_ptr_->original_trajectory);
 }
 
 void AdaptiveCruisePIDController::calculateTargetMotion()
 {
-  // calculate target motion
+  const double diff_distance_to_object =
+    acc_info_ptr_->current_distance_to_object - acc_info_ptr_->ideal_distance_to_object;
+
+  acc_motion_.target_velocity = acc_info_ptr_->current_ego_velocity +
+                                acc_param_.p_term_in_velocity_pid * diff_distance_to_object;
+  // TODO(tkimura4) calculate accel and jerk depends on current diff distance
+  acc_motion_.target_acceleration = acc_param_.acc_min_acceleration;
+  acc_motion_.target_jerk = acc_param_.acc_min_jerk;
 }
 
 bool AdaptiveCruisePIDController::getTargetMotion(
@@ -87,7 +149,7 @@ bool AdaptiveCruisePIDController::getTargetMotion(
   return true;
 }
 
-Trajectory AdaptiveCruisePIDController::getAccTrajectory(bool & emergency_flag)
+TrajectoryPoints AdaptiveCruisePIDController::getAccTrajectory(bool & emergency_flag)
 {
   if (!acc_info_ptr_) {
     emergency_flag = false;
@@ -102,6 +164,14 @@ Trajectory AdaptiveCruisePIDController::getAccTrajectory(bool & emergency_flag)
 
   emergency_flag = acc_motion_.emergency;
   return acc_motion_.planned_trajectory;
+}
+
+double AdaptiveCruisePIDController::calcStoppingDistFromCurrentVel(const double current_velocity)
+{
+  const double idling_travel_distance = current_velocity * acc_param_.breaking_delay_time;
+  const double braking_distance =
+    (current_velocity * current_velocity) / (2.0 * acc_param_.stop_min_acceleration);
+  return idling_travel_distance + braking_distance;
 }
 
 void AdaptiveCruisePIDController::updateState(
@@ -129,6 +199,46 @@ void AdaptiveCruisePIDController::updateState(
   } else {
     current_state = State::STOP;
   }
+}
+
+TrajectoryPoints AdaptiveCruisePIDController::insertStopPoint(
+  const double stop_distance, const TrajectoryPoints & trajectory_points)
+{
+  TrajectoryPoints trajectory_with_stop_point = trajectory_points;
+
+  if (trajectory_points.empty()) {
+    return trajectory_points;
+  }
+
+  // calulcate stop index and stop point
+  double accumulated_length = 0;
+  double insert_idx = 0;
+  geometry_msgs::msg::Pose stop_pose;
+  for (size_t i = 1; i < trajectory_points.size(); i++) {
+    const auto prev_pose = trajectory_points.at(i - 1).pose;
+    const auto curr_pose = trajectory_points.at(i).pose;
+    const double segment_length = tier4_autoware_utils::calcDistance3d(prev_pose, curr_pose);
+    accumulated_length += segment_length;
+    if (accumulated_length > stop_distance) {
+      insert_idx = i;
+      const double ratio = 1 - (accumulated_length - stop_distance) / segment_length;
+      stop_pose = lerpByPose(prev_pose, curr_pose, ratio);
+      break;
+    }
+  }
+
+  // insert stop point
+  TrajectoryPoint stop_point;
+  stop_point.longitudinal_velocity_mps = 0.0;
+  stop_point.lateral_velocity_mps = 0.0;
+  stop_point.pose = stop_pose;
+  trajectory_with_stop_point.insert(trajectory_with_stop_point.begin() + insert_idx, stop_point);
+  // set 0 velocity to points after the stop point
+  for (size_t i = insert_idx; i < trajectory_with_stop_point.size(); i++) {
+    trajectory_with_stop_point.at(insert_idx).longitudinal_velocity_mps = 0.0;
+    trajectory_with_stop_point.at(insert_idx).lateral_velocity_mps = 0.0;
+  }
+  return trajectory_with_stop_point;
 }
 
 }  // namespace motion_planning

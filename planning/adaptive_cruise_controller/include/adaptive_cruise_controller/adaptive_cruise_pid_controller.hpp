@@ -15,7 +15,8 @@
 #ifndef ADAPTIVE_CRUISE_CONTROLLER__ADAPTIVE_CRUISE_PID_CONTROLLER_HPP_
 #define ADAPTIVE_CRUISE_CONTROLLER__ADAPTIVE_CRUISE_PID_CONTROLLER_HPP_
 
-#include <tier4_autoware_utils/tier4_autoware_utils.hpp>
+#include <adaptive_cruise_controller/utilities.hpp>
+#include <rclcpp/rclcpp.hpp>
 
 #include <autoware_auto_perception_msgs/msg/predicted_objects.hpp>
 #include <autoware_auto_planning_msgs/msg/trajectory.hpp>
@@ -25,7 +26,8 @@ namespace motion_planning
 {
 
 using autoware_auto_perception_msgs::msg::PredictedObject;
-using autoware_auto_planning_msgs::msg::Trajectory;
+using autoware_auto_planning_msgs::msg::TrajectoryPoint;
+using TrajectoryPoints = std::vector<TrajectoryPoint>;
 using nav_msgs::msg::Odometry;
 
 struct AccParam
@@ -36,7 +38,11 @@ struct AccParam
   double acc_min_acceleration;
   double acc_min_jerk;
   double stop_min_acceleration;
-  double stop_min_jerk;
+  double object_min_acceleration;
+  double minimum_margin_distance;
+  double idling_time;
+  double breaking_delay_time;
+  double p_term_in_velocity_pid;
 };
 
 class AdaptiveCruisePIDController
@@ -51,7 +57,7 @@ public:
     double current_object_velocity;
     double current_distance_to_object;
     double ideal_distance_to_object;
-    Trajectory original_trajectory;
+    TrajectoryPoints original_trajectory;
   };
 
   struct AccMotion
@@ -59,24 +65,20 @@ public:
     double target_velocity;
     double target_acceleration;
     double target_jerk;
-    Trajectory planned_trajectory;
+    TrajectoryPoints planned_trajectory;
     bool emergency;  // true when ACC makes a plan to collide with a car in front
   };
 
   explicit AdaptiveCruisePIDController(const double baselink2front, const AccParam & acc_param);
   AdaptiveCruiseInformation getAccInfo() { return *acc_info_ptr_; }
 
-  void getInformationForAdaptiveCruise(
-    const Trajectory & trajectory, const geometry_msgs::msg::PoseStamped & pose,
-    const Odometry & odometry, const PredictedObject & object);
+  void calcInformationForAdaptiveCruise(
+    const TrajectoryPoints & trajectory_points, const geometry_msgs::msg::PoseStamped & pose,
+    const Odometry & odometry, const PredictedObject & object, const rclcpp::Time & object_time);
 
   void calculate();
-  void calculateTargetMotion();
-  void calcTrajectoryWithStopPoints();
   bool getTargetMotion(double & target_velocity, double & target_acc, double & target_jerk);
-  Trajectory getAccTrajectory(bool & emergency_flag);
-
-  void updateState(const rclcpp::Time & current_time, const double obstacle_velocity);
+  TrajectoryPoints getAccTrajectory(bool & emergency_flag);
 
 private:
   // parameter
@@ -89,6 +91,15 @@ private:
   std::shared_ptr<AdaptiveCruiseInformation> acc_info_ptr_;
   std::shared_ptr<AdaptiveCruiseInformation> prev_acc_info_ptr_;
   AccMotion acc_motion_;
+
+  // functions
+  void updateState(const rclcpp::Time & current_time, const double obstacle_velocity);
+  double getIdealDistanceToObject(const double current_velocity, const double object_velocity);
+  double calcStoppingDistFromCurrentVel(const double current_velocity);
+  void calculateTargetMotion();
+  void calcTrajectoryWithStopPoints();
+  TrajectoryPoints insertStopPoint(
+    const double stop_distance, const TrajectoryPoints & trajectory_points);
 };
 
 }  // namespace motion_planning

@@ -22,11 +22,15 @@
 
 #include <autoware_auto_perception_msgs/msg/predicted_objects.hpp>
 #include <autoware_auto_planning_msgs/msg/trajectory.hpp>
+#include <geometry_msgs/msg/pose.hpp>
 
 #include <boost/assert.hpp>
 #include <boost/assign/list_of.hpp>
 #include <boost/format.hpp>
 #include <boost/geometry.hpp>
+
+#include <tf2/utils.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 namespace motion_planning
 {
@@ -63,7 +67,9 @@ void convertcvPointsToBoostPolygon(
   const std::vector<cv::Point2d> & points, Polygon2d object_polygon);
 bool isClockWise(const Polygon2d & polygon);
 Polygon2d inverseClockWise(const Polygon2d & polygon);
+geometry_msgs::msg::Pose lerpByPose(
+  const geometry_msgs::msg::Pose & p1, const geometry_msgs::msg::Pose & p2, const double t);
 
 }  // namespace motion_planning
 
-#endif  // OBSTACLE_STOP_PLANNER__DEBUG_MARKER_HPP_
+#endif  // ADAPTIVE_CRUISE_CONTROLLER__UTILITIES_HPP_

@@ -200,4 +200,22 @@ void convertcvPointsToBoostPolygon(const std::vector<cv::Point2d> & points, Poly
   boost_polygon.outer().push_back(bg::make<Point2d>(points.front().x, points.front().y));
 }
 
+geometry_msgs::msg::Pose lerpByPose(
+  const geometry_msgs::msg::Pose & p1, const geometry_msgs::msg::Pose & p2, const double t)
+{
+  tf2::Transform tf_transform1, tf_transform2;
+  tf2::fromMsg(p1, tf_transform1);
+  tf2::fromMsg(p2, tf_transform2);
+  const auto & tf_point = tf2::lerp(tf_transform1.getOrigin(), tf_transform2.getOrigin(), t);
+  const auto & tf_quaternion =
+    tf2::slerp(tf_transform1.getRotation(), tf_transform2.getRotation(), t);
+
+  geometry_msgs::msg::Pose pose{};
+  pose.position.x = tf_point.x();
+  pose.position.y = tf_point.y();
+  pose.position.z = tf_point.z();
+  pose.orientation = tf2::toMsg(tf_quaternion);
+  return pose;
+}
+
 }  // namespace motion_planning
