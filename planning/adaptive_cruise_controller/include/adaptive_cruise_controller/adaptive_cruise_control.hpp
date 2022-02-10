@@ -16,6 +16,7 @@
 #define ADAPTIVE_CRUISE_CONTROLLER__ADAPTIVE_CRUISE_CONTROL_HPP_
 
 #include <adaptive_cruise_controller/adaptive_cruise_pid_controller.hpp>
+#include <adaptive_cruise_controller/utilities.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -24,6 +25,7 @@
 #include <tier4_autoware_utils/trajectory/tmp_conversion.hpp>
 #include <vehicle_info_util/vehicle_info_util.hpp>
 
+#include <autoware_auto_perception_msgs/msg/object_classification.hpp>
 #include <autoware_auto_perception_msgs/msg/predicted_objects.hpp>
 #include <autoware_auto_planning_msgs/msg/trajectory.hpp>
 #include <nav_msgs/msg/odometry.hpp>
@@ -40,6 +42,7 @@
 namespace motion_planning
 {
 namespace bg = boost::geometry;
+using autoware_auto_perception_msgs::msg::ObjectClassification;
 using autoware_auto_perception_msgs::msg::PredictedObject;
 using autoware_auto_perception_msgs::msg::PredictedObjects;
 using autoware_auto_perception_msgs::msg::PredictedPath;
@@ -106,7 +109,7 @@ private:
   void createPolygonFromTrajectoryPoints(
     const TrajectoryPoints & trajectory_points, const double expand_width,
     std::vector<Polygon2d> & polygon);
-  void extractObjectsInPolygon(
+  void extractVehicleObjectsInPolygon(
     const PredictedObjects & objects, const std::vector<Polygon2d> & target_polygons,
     PredictedObjects & objects_in_polygon);
   void getTargetObjects(
@@ -119,29 +122,10 @@ private:
     const double velocity, const double acceleration, const double jerk);
   VelocityLimitClearCommand createVelocityLimitClearCommandMsg();
 
-  void convexHull(
-    const std::vector<cv::Point2d> & points, std::vector<cv::Point2d> & polygon_points);
-  bool isObjectWithinPolygon(
-    const std::vector<Polygon2d> & target_polygons, const Polygon2d & object_polygon,
-    const double overlap_threshold = 0.1);
-  bool isAngleAlignedWithTrajectory(
-    const geometry_msgs::msg::Pose & pose, const TrajectoryPoints & trajectory_points,
-    const double threshold_angle);
-  bool isPoseNearTrajectory(
-    const geometry_msgs::msg::Pose & pose, const TrajectoryPoints & trajectory_points,
-    const double threshold_dist, const double threshold_angle);
-  bool isPathNearTrajectory(
-    const PredictedPath & path, const TrajectoryPoints & trajectory_points,
-    const double threshold_dist, const double threshold_angle);
   PredictedPath getHighestConfidencePathFromObject(const PredictedObject & object);
   geometry_msgs::msg::Pose getObjectPose(const PredictedObject & object);
   bool isObjectVelocityHigh(const PredictedObject & object);
-
-  void convertObjectToBoostPolygon(const PredictedObject & object, Polygon2d object_polygon);
-  void convertcvPointsToBoostPolygon(
-    const std::vector<cv::Point2d> & points, Polygon2d object_polygon);
-  bool isClockWise(const Polygon2d & polygon);
-  Polygon2d inverseClockWise(const Polygon2d & polygon);
+  bool isTargetObjectType(const PredictedObject & object);
 
   Odometry::ConstSharedPtr current_odometry_ptr_;
   PredictedObjects::ConstSharedPtr current_objects_ptr_;
