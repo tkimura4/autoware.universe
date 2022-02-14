@@ -19,9 +19,8 @@ namespace motion_planning
 
 AdaptiveCruiseControlCore::AdaptiveCruiseControlCore(
   const double baselink2front, const AccParam & acc_param)
-: baselink2front_(baselink2front), acc_param_(acc_param)
 {
-  // TODO
+  acc_pid_node_ptr_ = std::make_shared<AccPidNode>(baselink2front, acc_param);
 }
 
 void AdaptiveCruiseControlCore::calcInformationForAdaptiveCruise(
@@ -89,56 +88,25 @@ void AdaptiveCruiseControlCore::calculate()
     return;
   }
 
-  updateState(acc_info_ptr_->info_time, acc_info_ptr_->current_object_velocity);
-
-  if (current_state == State::STOP) {
-    calcTrajectoryWithStopPoints();
-  } else if (current_state == State::ACC) {
-    calculateTargetMotion();
-  }
-
-  prev_acc_info_ptr_ = acc_info_ptr_;
+  acc_pid_node_ptr_->calculate(*acc_info_ptr_, acc_motion_);
 }
 
-void AdaptiveCruiseControlCore::calcTrajectoryWithStopPoints()
+State AdaptiveCruiseControlCore::getState()
 {
-  const double original_stop_dist =
-    acc_info_ptr_->current_distance_to_object - acc_param_.minimum_margin_distance;
-  const double min_stop_dist = calcStoppingDistFromCurrentVel(acc_info_ptr_->current_ego_velocity);
-
-  double target_stop_dist;
-  if (original_stop_dist >= min_stop_dist) {
-    target_stop_dist = original_stop_dist;
-    acc_motion_.emergency = false;
-  } else {
-    target_stop_dist = min_stop_dist;
-    acc_motion_.emergency = true;
+  if (!acc_pid_node_ptr_) {
+    return State::NONE;
   }
-
-  acc_motion_.planned_trajectory =
-    insertStopPoint(target_stop_dist, acc_info_ptr_->original_trajectory, acc_motion_.stop_pose);
-}
-
-void AdaptiveCruiseControlCore::calculateTargetMotion()
-{
-  const double diff_distance_to_object =
-    acc_info_ptr_->current_distance_to_object - acc_info_ptr_->ideal_distance_to_object;
-
-  acc_motion_.target_velocity = acc_info_ptr_->current_ego_velocity +
-                                acc_param_.p_term_in_velocity_pid * diff_distance_to_object;
-  // TODO(tkimura4) calculate accel and jerk depends on current diff distance
-  acc_motion_.target_acceleration = acc_param_.acc_min_acceleration;
-  acc_motion_.target_jerk = acc_param_.acc_min_jerk;
+  return acc_pid_node_ptr_->current_state;
 }
 
 bool AdaptiveCruiseControlCore::getTargetMotion(
   double & target_velocity, double & target_acc, double & target_jerk)
 {
-  if (!acc_info_ptr_) {
+  if (!acc_pid_node_ptr_ || !acc_info_ptr_) {
     return false;
   }
 
-  if (current_state != State::ACC) {
+  if (!acc_motion_.use_target_motion) {
     // no target motion
     return false;
   }
@@ -152,12 +120,12 @@ bool AdaptiveCruiseControlCore::getTargetMotion(
 
 TrajectoryPoints AdaptiveCruiseControlCore::getAccTrajectory(bool & emergency_flag)
 {
-  if (!acc_info_ptr_) {
+  if (!acc_pid_node_ptr_ || !acc_info_ptr_) {
     emergency_flag = false;
     return acc_info_ptr_->original_trajectory;
   }
 
-  if (current_state != State::STOP) {
+  if (acc_pid_node_ptr_->current_state != State::STOP) {
     // no trajectory update
     emergency_flag = false;
     return acc_info_ptr_->original_trajectory;
@@ -165,81 +133,6 @@ TrajectoryPoints AdaptiveCruiseControlCore::getAccTrajectory(bool & emergency_fl
 
   emergency_flag = acc_motion_.emergency;
   return acc_motion_.planned_trajectory;
-}
-
-double AdaptiveCruiseControlCore::calcStoppingDistFromCurrentVel(const double current_velocity)
-{
-  const double idling_travel_distance = current_velocity * acc_param_.breaking_delay_time;
-  const double braking_distance =
-    (current_velocity * current_velocity) / (2.0 * acc_param_.stop_min_acceleration);
-  return idling_travel_distance + braking_distance;
-}
-
-void AdaptiveCruiseControlCore::updateState(
-  const rclcpp::Time & current_time, const double obstacle_velocity)
-{
-  if (!prev_acc_info_ptr_) {
-    current_state = State::NONE;
-  }
-
-  if (
-    (current_time - prev_acc_info_ptr_->info_time).seconds() > acc_param_.reset_time_to_acc_state) {
-    // reset current_state if previous acc_time is too old
-    current_state = State::NONE;
-  }
-
-  double thresh_velocity = acc_param_.object_low_velocity_thresh;
-
-  // provide a hysteresis in the state to prevent chattering
-  if (current_state == State::STOP) {
-    thresh_velocity += acc_param_.object_velocity_hysteresis_margin;
-  }
-
-  if (obstacle_velocity >= thresh_velocity) {
-    current_state = State::ACC;
-  } else {
-    current_state = State::STOP;
-  }
-}
-
-TrajectoryPoints AdaptiveCruiseControlCore::insertStopPoint(
-  const double stop_distance, const TrajectoryPoints & trajectory_points,
-  geometry_msgs::msg::Pose & stop_pose)
-{
-  TrajectoryPoints trajectory_with_stop_point = trajectory_points;
-
-  if (trajectory_points.empty()) {
-    return trajectory_points;
-  }
-
-  // calulcate stop index and stop point
-  double accumulated_length = 0;
-  double insert_idx = 0;
-  for (size_t i = 1; i < trajectory_points.size(); i++) {
-    const auto prev_pose = trajectory_points.at(i - 1).pose;
-    const auto curr_pose = trajectory_points.at(i).pose;
-    const double segment_length = tier4_autoware_utils::calcDistance3d(prev_pose, curr_pose);
-    accumulated_length += segment_length;
-    if (accumulated_length > stop_distance) {
-      insert_idx = i;
-      const double ratio = 1 - (accumulated_length - stop_distance) / segment_length;
-      stop_pose = lerpByPose(prev_pose, curr_pose, ratio);
-      break;
-    }
-  }
-
-  // insert stop point
-  TrajectoryPoint stop_point;
-  stop_point.longitudinal_velocity_mps = 0.0;
-  stop_point.lateral_velocity_mps = 0.0;
-  stop_point.pose = stop_pose;
-  trajectory_with_stop_point.insert(trajectory_with_stop_point.begin() + insert_idx, stop_point);
-  // set 0 velocity to points after the stop point
-  for (size_t i = insert_idx; i < trajectory_with_stop_point.size(); i++) {
-    trajectory_with_stop_point.at(insert_idx).longitudinal_velocity_mps = 0.0;
-    trajectory_with_stop_point.at(insert_idx).lateral_velocity_mps = 0.0;
-  }
-  return trajectory_with_stop_point;
 }
 
 }  // namespace motion_planning

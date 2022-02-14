@@ -20,6 +20,7 @@ find_package(PCL REQUIRED)
 ament_auto_add_library(adaptive_cruise_controller SHARED
   src/adaptive_cruise_control.cpp
   src/adaptive_cruise_control_core.cpp
+  src/acc_pid.cpp
   src/debug_marker.cpp
   src/utilities.cpp
 )

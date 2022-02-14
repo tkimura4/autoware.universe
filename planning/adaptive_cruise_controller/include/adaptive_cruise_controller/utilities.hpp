@@ -45,6 +45,45 @@ using TrajectoryPoints = std::vector<TrajectoryPoint>;
 using tier4_autoware_utils::Point2d;
 using tier4_autoware_utils::Polygon2d;
 
+struct AccParam
+{
+  double object_low_velocity_thresh;
+  double object_velocity_hysteresis_margin;
+  double reset_time_to_acc_state;
+  double acc_min_acceleration;
+  double acc_min_jerk;
+  double stop_min_acceleration;
+  double object_min_acceleration;
+  double minimum_margin_distance;
+  double idling_time;
+  double breaking_delay_time;
+  double p_term_in_velocity_pid;
+};
+
+enum State { NONE = 0, ACC = 1, STOP = 2 };
+
+struct AccMotion
+{
+  bool use_target_motion;
+  double target_velocity;
+  double target_acceleration;
+  double target_jerk;
+  TrajectoryPoints planned_trajectory;
+  geometry_msgs::msg::Pose stop_pose;
+  bool emergency;  // true when ACC makes a plan to collide with a car in front
+};
+
+struct AdaptiveCruiseInformation
+{
+  rclcpp::Time info_time;  // current time of pose stamped
+  double current_ego_velocity;
+  double current_object_velocity;
+  double current_distance_to_object;
+  double ideal_distance_to_object;
+  PredictedObject target_object;
+  TrajectoryPoints original_trajectory;
+};
+
 void convexHull(const std::vector<cv::Point2d> & points, std::vector<cv::Point2d> & polygon_points);
 bool isObjectWithinPolygon(
   const std::vector<Polygon2d> & target_polygons, const Polygon2d & object_polygon,
