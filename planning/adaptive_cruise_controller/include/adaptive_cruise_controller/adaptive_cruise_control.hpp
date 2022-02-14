@@ -139,7 +139,7 @@ private:
   geometry_msgs::msg::PoseStamped::ConstSharedPtr current_pose_;
   VehicleInfo vehicle_info_;
 
-  std::shared_ptr<AdaptiveCruisePIDController> controller_ptr_;
+  std::shared_ptr<AdaptiveCruiseControlCore> controller_ptr_;
 
   // only for debug
   void fillAndPublishDebugOutput(const PredictedObject & target_object);

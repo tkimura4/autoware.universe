@@ -68,10 +68,10 @@ struct AdaptiveCruiseInformation
   TrajectoryPoints original_trajectory;
 };
 
-class AdaptiveCruisePIDController
+class AdaptiveCruiseControlCore
 {
 public:
-  explicit AdaptiveCruisePIDController(const double baselink2front, const AccParam & acc_param);
+  explicit AdaptiveCruiseControlCore(const double baselink2front, const AccParam & acc_param);
   AdaptiveCruiseInformation getAccInfo() { return *acc_info_ptr_; }
 
   void calcInformationForAdaptiveCruise(

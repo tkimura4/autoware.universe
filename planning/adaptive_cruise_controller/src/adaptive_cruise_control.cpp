@@ -37,7 +37,7 @@ AdaptiveCruiseControllerNode::AdaptiveCruiseControllerNode(const rclcpp::NodeOpt
 
   // controller
   controller_ptr_ =
-    std::make_shared<AdaptiveCruisePIDController>(vehicle_info_.front_overhang_m, acc_param_);
+    std::make_shared<AdaptiveCruiseControlCore>(vehicle_info_.front_overhang_m, acc_param_);
 
   // wait for self pose
   self_pose_listener_.waitForFirstPose();
