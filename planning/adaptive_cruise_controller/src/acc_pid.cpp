@@ -22,7 +22,9 @@ AccPidNode::AccPidNode(const double baselink2front, const AccParam & acc_param)
 {
 }
 
-void AccPidNode::updateState(const rclcpp::Time & current_time, const double obstacle_velocity)
+void AccPidNode::updateState(
+  const rclcpp::Time & current_time, const double ego_velocity, const double obstacle_velocity,
+  const double dist_to_obstacle)
 {
   if (!prev_acc_info_ptr_) {
     current_state = State::NONE;
@@ -41,20 +43,31 @@ void AccPidNode::updateState(const rclcpp::Time & current_time, const double obs
     thresh_velocity += acc_param_.object_velocity_hysteresis_margin;
   }
 
+  // change state depending on obstacle velocity
   if (obstacle_velocity >= thresh_velocity) {
     current_state = State::ACC;
   } else {
+    current_state = State::STOP;
+  }
+
+  // if current distance to object is too short, change state to STOP
+  if (calcEmergencyDistFromVel(obstacle_velocity, ego_velocity) < dist_to_obstacle) {
     current_state = State::STOP;
   }
 }
 
 void AccPidNode::calculate(const AdaptiveCruiseInformation & acc_info, AccMotion & acc_motion)
 {
+  updateState(
+    acc_info.info_time, acc_info.current_ego_velocity, acc_info.current_object_velocity,
+    acc_info.current_distance_to_object);
+
   if (current_state == State::STOP) {
     acc_motion.use_target_motion = false;
     calcTrajectoryWithStopPoints(acc_info, acc_motion);
   } else if (current_state == State::ACC) {
     calculateTargetMotion(acc_info, acc_motion);
+    acc_motion.use_trajectory = false;
   }
 
   prev_acc_info_ptr_ = std::make_shared<AdaptiveCruiseInformation>(acc_info);
@@ -66,6 +79,23 @@ double AccPidNode::calcStoppingDistFromCurrentVel(const double current_velocity)
   const double braking_distance =
     (current_velocity * current_velocity) / (2.0 * acc_param_.stop_min_acceleration);
   return idling_travel_distance + braking_distance;
+}
+
+double AccPidNode::calcEmergencyDistFromVel(
+  const double current_velocity, const double obj_velocity)
+{
+  // when the target object is faster than ego-vehicle
+  if (current_velocity < obj_velocity) {
+    return acc_param_.minimum_margin_distance;
+  }
+
+  const double idling_travel_distance = current_velocity * acc_param_.breaking_delay_time;
+  const double braking_distance =
+    (current_velocity * current_velocity) / (2.0 * acc_param_.stop_min_acceleration);
+  const double object_braking_distance =
+    (obj_velocity * obj_velocity) / (2.0 * acc_param_.stop_min_acceleration);
+  const double emergency_dist = idling_travel_distance + braking_distance - object_braking_distance;
+  return std::max(acc_param_.minimum_margin_distance, emergency_dist);
 }
 
 void AccPidNode::calculateTargetMotion(
@@ -100,6 +130,7 @@ void AccPidNode::calcTrajectoryWithStopPoints(
 
   acc_motion.planned_trajectory =
     insertStopPoint(target_stop_dist, acc_info.original_trajectory, acc_motion.stop_pose);
+  acc_motion.use_trajectory = true;
 }
 
 TrajectoryPoints AccPidNode::insertStopPoint(

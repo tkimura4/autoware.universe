@@ -125,7 +125,7 @@ TrajectoryPoints AdaptiveCruiseControlCore::getAccTrajectory(bool & emergency_fl
     return acc_info_ptr_->original_trajectory;
   }
 
-  if (acc_pid_node_ptr_->current_state != State::STOP) {
+  if (!acc_motion_.use_trajectory) {
     // no trajectory update
     emergency_flag = false;
     return acc_info_ptr_->original_trajectory;

@@ -68,6 +68,7 @@ struct AccMotion
   double target_velocity;
   double target_acceleration;
   double target_jerk;
+  bool use_trajectory;
   TrajectoryPoints planned_trajectory;
   geometry_msgs::msg::Pose stop_pose;
   bool emergency;  // true when ACC makes a plan to collide with a car in front

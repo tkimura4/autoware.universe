@@ -26,13 +26,16 @@ class AccPidNode
 public:
   explicit AccPidNode(const double baselink2front, const AccParam & acc_param);
 
-  void updateState(const rclcpp::Time & current_time, const double obstacle_velocity);
+  void updateState(
+    const rclcpp::Time & current_time, const double ego_velocity, const double obstacle_velocity,
+    const double dist_to_obstacle);
   void calculate(const AdaptiveCruiseInformation & acc_info, AccMotion & acc_motion);
 
   State current_state = State::NONE;
 
 private:
   double calcStoppingDistFromCurrentVel(const double current_velocity);
+  double calcEmergencyDistFromVel(const double current_velocity, const double obj_velocity);
   void calculateTargetMotion(const AdaptiveCruiseInformation & acc_info, AccMotion & acc_motion);
   void calcTrajectoryWithStopPoints(
     const AdaptiveCruiseInformation & acc_info, AccMotion & acc_motion);
