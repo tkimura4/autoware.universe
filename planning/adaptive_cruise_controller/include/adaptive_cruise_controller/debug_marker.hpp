@@ -19,13 +19,17 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <rclcpp/rclcpp.hpp>
 
+#include <autoware_auto_perception_msgs/msg/predicted_objects.hpp>
 #include <tier4_debug_msgs/msg/float32_multi_array_stamped.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
 namespace motion_planning
 {
 
+using autoware_auto_perception_msgs::msg::PredictedObject;
+using autoware_auto_perception_msgs::msg::Shape;
 using tier4_debug_msgs::msg::Float32MultiArrayStamped;
+using visualization_msgs::msg::Marker;
 using visualization_msgs::msg::MarkerArray;
 
 class DebugValues
@@ -34,18 +38,17 @@ public:
   enum class TYPE {
     CURRENT_VEL = 0,
     CURRENT_ACC = 1,
-    CURRENT_OBJECT_VEL_ = 2,
-    CURRENT_OBJECT_VEL_POSITION_DIFF = 3,
-    CURRENT_OBJECT_ACC = 4,
-    CURRENT_OBJECT_DISTANCE = 5,
-    IDEAL_OBJECT_DISTANCE = 6,
-    RSS_OBJECT_DISTANCE = 7,
-    FLAG_CUTIN_OBJECT = 8,
-    FLAG_CUTOUT_OBJECT = 9,
-    FLAG_FIND_OBJECT = 10,
-    FLAG_ADAPTIVE_CRUISE = 11,
-    FLAG_STOP = 12,
-    CURRENT_TARGET_VELOCITY = 13,
+    CURRENT_OBJECT_VEL = 2,
+    CURRENT_OBJECT_ACC = 3,
+    CURRENT_OBJECT_DISTANCE = 4,
+    IDEAL_OBJECT_DISTANCE = 5,
+    FLAG_CUTIN_OBJECT = 6,
+    FLAG_CUTOUT_OBJECT = 7,
+    FLAG_FIND_OBJECT = 8,
+    FLAG_ADAPTIVE_CRUISE = 9,
+    FLAG_STOP = 10,
+    FLAG_NONE = 11,
+    CURRENT_TARGET_VELOCITY = 12,
     SIZE
   };
 
@@ -73,6 +76,8 @@ public:
    */
   void setValues(const int type, const double val) { values_.at(type) = val; }
 
+  void resetValues() { values_.fill(0.0); }
+
 private:
   static constexpr int num_debug_values_ = static_cast<int>(TYPE::SIZE);
   std::array<double, static_cast<int>(TYPE::SIZE)> values_;
@@ -86,15 +91,29 @@ public:
   {
     debug_values_.setValues(type, val);
   }
-  void setStopLine(const geometry_msgs::msg::Pose & stop_pose, const double baselink2front);
-  void setPolygon(const std::vector<cv::Point2d> & points);
+  void resetDebugValues(){
+    debug_values_.resetValues();
+  }
+  void setVirtualWall(
+    const geometry_msgs::msg::Pose & stop_pose, const double offset, const bool is_stop_wall);
+  void setTargetPolygon(const PredictedObject & object);
+  void clearMarker();
+  void clearVirtualWall();
+  void clearTargetPolygon();
+  void publish();
   void publishMarker();
   void publishDebugValues();
 
 private:
+  Float32MultiArrayStamped convertDebugValuesToMsg(const DebugValues debug_value);
+
+  rclcpp::Node * node_;
+
   rclcpp::Publisher<MarkerArray>::SharedPtr pub_debug_marker_;
   rclcpp::Publisher<Float32MultiArrayStamped>::SharedPtr pub_debug_value_;
   DebugValues debug_values_;
+  std::shared_ptr<Marker> target_vehicle_marker_ptr_;
+  std::shared_ptr<MarkerArray> virtual_wall_marker_ptr_;
 };
 
 }  // namespace motion_planning

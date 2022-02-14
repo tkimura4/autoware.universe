@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <adaptive_cruise_controller/adaptive_cruise_pid_controller.hpp>
+#include <adaptive_cruise_controller/adaptive_cruise_control_core.hpp>
 
 namespace motion_planning
 {
@@ -57,6 +57,7 @@ void AdaptiveCruisePIDController::calcInformationForAdaptiveCruise(
   acc_info_ptr_->ideal_distance_to_object =
     getIdealDistanceToObject(odometry.twist.twist.linear.x, object_velocity_along_traj);
   acc_info_ptr_->info_time = rclcpp::Time(pose.header.stamp);
+  acc_info_ptr_->target_object = object;
   acc_info_ptr_->original_trajectory = trajectory_points;
 }
 
@@ -115,7 +116,7 @@ void AdaptiveCruisePIDController::calcTrajectoryWithStopPoints()
   }
 
   acc_motion_.planned_trajectory =
-    insertStopPoint(target_stop_dist, acc_info_ptr_->original_trajectory);
+    insertStopPoint(target_stop_dist, acc_info_ptr_->original_trajectory, acc_motion_.stop_pose);
 }
 
 void AdaptiveCruisePIDController::calculateTargetMotion()
@@ -202,7 +203,8 @@ void AdaptiveCruisePIDController::updateState(
 }
 
 TrajectoryPoints AdaptiveCruisePIDController::insertStopPoint(
-  const double stop_distance, const TrajectoryPoints & trajectory_points)
+  const double stop_distance, const TrajectoryPoints & trajectory_points,
+  geometry_msgs::msg::Pose & stop_pose)
 {
   TrajectoryPoints trajectory_with_stop_point = trajectory_points;
 
@@ -213,7 +215,6 @@ TrajectoryPoints AdaptiveCruisePIDController::insertStopPoint(
   // calulcate stop index and stop point
   double accumulated_length = 0;
   double insert_idx = 0;
-  geometry_msgs::msg::Pose stop_pose;
   for (size_t i = 1; i < trajectory_points.size(); i++) {
     const auto prev_pose = trajectory_points.at(i - 1).pose;
     const auto curr_pose = trajectory_points.at(i).pose;

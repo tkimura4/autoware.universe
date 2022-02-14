@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <adaptive_cruise_controller/adaptive_cruise_control.hpp>
-#include <adaptive_cruise_controller/adaptive_cruise_pid_controller.hpp>
+#include <adaptive_cruise_controller/adaptive_cruise_control_core.hpp>
 #include <adaptive_cruise_controller/debug_marker.hpp>
 
 namespace motion_planning
@@ -31,6 +31,9 @@ AdaptiveCruiseControllerNode::AdaptiveCruiseControllerNode(const rclcpp::NodeOpt
 
   // vehicle parameters
   vehicle_info_ = vehicle_info_util::VehicleInfoUtil(*this).getVehicleInfo();
+
+  // debug node
+  debug_node_ptr_ = std::make_shared<AdaptiveCruiseControllerDebugNode>(this);
 
   // controller
   controller_ptr_ =
@@ -52,6 +55,9 @@ AdaptiveCruiseControllerNode::AdaptiveCruiseControllerNode(const rclcpp::NodeOpt
 
 void AdaptiveCruiseControllerNode::onTrajectory(const Trajectory::ConstSharedPtr msg)
 {
+  // initialize
+  debug_node_ptr_->resetDebugValues();
+
   current_pose_ = self_pose_listener_.getCurrentPose();
   if (!isDataReady()) {
     return;
@@ -94,6 +100,7 @@ void AdaptiveCruiseControllerNode::onTrajectory(const Trajectory::ConstSharedPtr
 
   if (target_objects.objects.empty()) {
     // no target object
+    publishDebugOutputWithNoTarget();
     pub_trajectory_->publish(*msg);
   }
 
@@ -131,6 +138,9 @@ void AdaptiveCruiseControllerNode::onTrajectory(const Trajectory::ConstSharedPtr
   auto output_trajectory = tier4_autoware_utils::convertToTrajectory(output);
   output_trajectory.header = msg->header;
   pub_trajectory_->publish(output_trajectory);
+
+  // for debug
+  fillAndPublishDebugOutput(nearest_target_object);
 }
 
 void AdaptiveCruiseControllerNode::onOdometry(const Odometry::ConstSharedPtr msg)
@@ -376,6 +386,139 @@ Polygon2d AdaptiveCruiseControllerNodeinverseClockWise(const Polygon2d & polygon
   inverted_polygon.outer().reserve(poly.size());
   std::reverse_copy(poly.begin(), poly.end(), std::back_inserter(inverted_polygon.outer()));
   return inverted_polygon;
+}
+
+/* only for debug */
+
+void AdaptiveCruiseControllerNode::publishDebugOutputWithNoTarget()
+{
+  resetObjectTwistHistory();
+  prev_acc_info_.reset();
+  debug_node_ptr_->clearMarker();
+  const auto ego_twist_stamped =
+    toTwistStamped(current_odometry_ptr_->header, current_odometry_ptr_->twist.twist);
+  ego_accel_ = calcAcc(ego_twist_stamped, prev_ego_twist_, ego_accel_);
+  debug_node_ptr_->setDebugValues(
+    DebugValues::TYPE::CURRENT_VEL, current_odometry_ptr_->twist.twist.linear.x);
+  debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_ACC, ego_accel_);
+  debug_node_ptr_->publish();
+}
+
+void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObject & target_object)
+{
+  // for debug
+  {
+    const auto acc_info = controller_ptr_->getAccInfo();
+    const auto acc_motion = controller_ptr_->getAccMotion();
+    const auto acc_state = controller_ptr_->getState();
+
+    const auto ego_twist_stamped =
+      toTwistStamped(current_odometry_ptr_->header, current_odometry_ptr_->twist.twist);
+    ego_accel_ = calcAcc(ego_twist_stamped, prev_ego_twist_, ego_accel_);
+
+    const auto obj_twist_stamped = toTwistStamped(
+      current_objects_ptr_->header, target_object.kinematics.initial_twist_with_covariance.twist);
+
+    const auto cut_in_out = detectCutInAndOut(acc_info);
+
+    if (cut_in_out == CUT_IN_OUT::NONE) {
+      obj_accel_ = calcAcc(obj_twist_stamped, prev_object_twist_, obj_accel_);
+    } else {
+      prev_object_twist_.reset();
+      obj_accel_ = 0.0;
+    }
+
+    const auto target_velocity = acc_state == State::STOP ? 0.0 : acc_motion.target_velocity;
+
+    debug_node_ptr_->setDebugValues(
+      DebugValues::TYPE::CURRENT_VEL, current_odometry_ptr_->twist.twist.linear.x);
+    debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_ACC, ego_accel_);
+    debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_OBJECT_ACC, obj_accel_);
+    debug_node_ptr_->setDebugValues(
+      DebugValues::TYPE::CURRENT_OBJECT_DISTANCE, acc_info.current_distance_to_object);
+    debug_node_ptr_->setDebugValues(
+      DebugValues::TYPE::CURRENT_OBJECT_VEL, acc_info.current_object_velocity);
+    debug_node_ptr_->setDebugValues(
+      DebugValues::TYPE::IDEAL_OBJECT_DISTANCE, acc_info.ideal_distance_to_object);
+    debug_node_ptr_->setDebugValues(
+      DebugValues::TYPE::FLAG_CUTIN_OBJECT, cut_in_out == CUT_IN_OUT::CUT_IN);
+    debug_node_ptr_->setDebugValues(
+      DebugValues::TYPE::FLAG_CUTOUT_OBJECT, cut_in_out == CUT_IN_OUT::CUT_OUT);
+    debug_node_ptr_->setDebugValues(DebugValues::TYPE::FLAG_FIND_OBJECT, 1.0);
+    debug_node_ptr_->setDebugValues(
+      DebugValues::TYPE::FLAG_ADAPTIVE_CRUISE, (acc_state == State::ACC));
+    debug_node_ptr_->setDebugValues(DebugValues::TYPE::FLAG_STOP, (acc_state == State::STOP));
+    debug_node_ptr_->setDebugValues(DebugValues::TYPE::FLAG_NONE, 0.0);
+    debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_TARGET_VELOCITY, target_velocity);
+
+    debug_node_ptr_->clearMarker();
+    debug_node_ptr_->setTargetPolygon(target_object);
+    if (acc_state == State::ACC) {
+      const auto target_object_pose = target_object.kinematics.initial_pose_with_covariance.pose;
+      const auto offset =
+        acc_param_.minimum_margin_distance + target_object.shape.dimensions.x / 2.0;
+      debug_node_ptr_->setVirtualWall(target_object_pose, offset, true);
+
+    } else if (acc_state == State::STOP) {
+      const auto stop_pose = controller_ptr_->getAccMotion().stop_pose;
+      debug_node_ptr_->setVirtualWall(stop_pose, vehicle_info_.front_overhang_m, true);
+    }
+    debug_node_ptr_->publish();
+  }
+}
+
+double AdaptiveCruiseControllerNode::calcAcc(
+  const geometry_msgs::msg::TwistStamped & twist,
+  std::shared_ptr<geometry_msgs::msg::TwistStamped> & prev_twist, const double prev_acc,
+  const double lowpass_gain, const double timeout)
+{
+  if (!prev_twist) {
+    prev_twist = std::make_shared<geometry_msgs::msg::TwistStamped>(twist);
+    return 0.0;
+  }
+
+  const double dt =
+    (rclcpp::Time(twist.header.stamp) - rclcpp::Time(prev_twist->header.stamp)).seconds();
+  const double dv = twist.twist.linear.x - prev_twist->twist.linear.x;
+
+  if (dt > timeout || dt <= 0.0) {
+    prev_twist = std::make_shared<geometry_msgs::msg::TwistStamped>(twist);
+    return 0.0;
+  }
+
+  const double acc = dv / dt;
+  return prev_acc * lowpass_gain + acc * (1.0 - lowpass_gain);
+}
+
+void AdaptiveCruiseControllerNode::resetObjectTwistHistory()
+{
+  prev_object_twist_.reset();
+  obj_accel_ = 0.0;
+}
+
+geometry_msgs::msg::TwistStamped AdaptiveCruiseControllerNode::toTwistStamped(
+  const std_msgs::msg::Header & header, const geometry_msgs::msg::Twist & twist)
+{
+  geometry_msgs::msg::TwistStamped twist_stamped;
+  twist_stamped.header = header;
+  twist_stamped.twist = twist;
+  return twist_stamped;
+}
+
+CUT_IN_OUT AdaptiveCruiseControllerNode::detectCutInAndOut(
+  AdaptiveCruiseInformation acc_info, const double threshold_length)
+{
+  if (!prev_acc_info_) {
+    prev_acc_info_ = std::make_shared<AdaptiveCruiseInformation>(acc_info);
+    return CUT_IN_OUT::CUT_IN;
+  }
+
+  const double d_dist =
+    acc_info.current_distance_to_object - prev_acc_info_->current_distance_to_object;
+
+  if (d_dist > threshold_length) return CUT_IN_OUT::CUT_OUT;
+  if (d_dist < -threshold_length) return CUT_IN_OUT::CUT_IN;
+  return CUT_IN_OUT::NONE;
 }
 
 }  // namespace motion_planning

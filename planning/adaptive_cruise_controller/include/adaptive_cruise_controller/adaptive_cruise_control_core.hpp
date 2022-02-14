@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef ADAPTIVE_CRUISE_CONTROLLER__ADAPTIVE_CRUISE_PID_CONTROLLER_HPP_
-#define ADAPTIVE_CRUISE_CONTROLLER__ADAPTIVE_CRUISE_PID_CONTROLLER_HPP_
+#ifndef ADAPTIVE_CRUISE_CONTROLLER__ADAPTIVE_CRUISE_CONTROL_CORE_HPP_
+#define ADAPTIVE_CRUISE_CONTROLLER__ADAPTIVE_CRUISE_CONTROL_CORE_HPP_
 
 #include <adaptive_cruise_controller/utilities.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -45,30 +45,32 @@ struct AccParam
   double p_term_in_velocity_pid;
 };
 
+enum State { NONE = 0, ACC = 1, STOP = 2 };
+
+struct AccMotion
+{
+  double target_velocity;
+  double target_acceleration;
+  double target_jerk;
+  TrajectoryPoints planned_trajectory;
+  geometry_msgs::msg::Pose stop_pose;
+  bool emergency;  // true when ACC makes a plan to collide with a car in front
+};
+
+struct AdaptiveCruiseInformation
+{
+  rclcpp::Time info_time;  // current time of pose stamped
+  double current_ego_velocity;
+  double current_object_velocity;
+  double current_distance_to_object;
+  double ideal_distance_to_object;
+  PredictedObject target_object;
+  TrajectoryPoints original_trajectory;
+};
+
 class AdaptiveCruisePIDController
 {
 public:
-  enum State { NONE = 0, ACC = 1, STOP = 2 };
-
-  struct AdaptiveCruiseInformation
-  {
-    rclcpp::Time info_time;  // current time of pose stamped
-    double current_ego_velocity;
-    double current_object_velocity;
-    double current_distance_to_object;
-    double ideal_distance_to_object;
-    TrajectoryPoints original_trajectory;
-  };
-
-  struct AccMotion
-  {
-    double target_velocity;
-    double target_acceleration;
-    double target_jerk;
-    TrajectoryPoints planned_trajectory;
-    bool emergency;  // true when ACC makes a plan to collide with a car in front
-  };
-
   explicit AdaptiveCruisePIDController(const double baselink2front, const AccParam & acc_param);
   AdaptiveCruiseInformation getAccInfo() { return *acc_info_ptr_; }
 
@@ -79,6 +81,8 @@ public:
   void calculate();
   bool getTargetMotion(double & target_velocity, double & target_acc, double & target_jerk);
   TrajectoryPoints getAccTrajectory(bool & emergency_flag);
+  State getState() { return current_state; };
+  AccMotion getAccMotion() { return acc_motion_; };
 
 private:
   // parameter
@@ -99,9 +103,10 @@ private:
   void calculateTargetMotion();
   void calcTrajectoryWithStopPoints();
   TrajectoryPoints insertStopPoint(
-    const double stop_distance, const TrajectoryPoints & trajectory_points);
+    const double stop_distance, const TrajectoryPoints & trajectory_points,
+    geometry_msgs::msg::Pose & stop_pose);
 };
 
 }  // namespace motion_planning
 
-#endif  // ADAPTIVE_CRUISE_CONTROLLER__ADAPTIVE_CRUISE_PID_CONTROLLER_HPP_
+#endif  // ADAPTIVE_CRUISE_CONTROLLER__ADAPTIVE_CRUISE_CONTROL_CORE_HPP_

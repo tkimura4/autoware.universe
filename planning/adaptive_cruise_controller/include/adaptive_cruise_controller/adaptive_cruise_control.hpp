@@ -15,18 +15,20 @@
 #ifndef ADAPTIVE_CRUISE_CONTROLLER__ADAPTIVE_CRUISE_CONTROL_HPP_
 #define ADAPTIVE_CRUISE_CONTROLLER__ADAPTIVE_CRUISE_CONTROL_HPP_
 
-#include <adaptive_cruise_controller/adaptive_cruise_pid_controller.hpp>
+#include <adaptive_cruise_controller/adaptive_cruise_control_core.hpp>
+#include <adaptive_cruise_controller/debug_marker.hpp>
 #include <adaptive_cruise_controller/utilities.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <tier4_autoware_utils/trajectory/tmp_conversion.hpp>
 #include <vehicle_info_util/vehicle_info_util.hpp>
 
-#include <tier4_autoware_utils/trajectory/tmp_conversion.hpp>
 #include <autoware_auto_perception_msgs/msg/object_classification.hpp>
 #include <autoware_auto_perception_msgs/msg/predicted_objects.hpp>
 #include <autoware_auto_planning_msgs/msg/trajectory.hpp>
+#include <geometry_msgs/msg/twist_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <tier4_debug_msgs/msg/float32_multi_array_stamped.hpp>
 #include <tier4_planning_msgs/msg/velocity_limit.hpp>
@@ -54,6 +56,12 @@ using nav_msgs::msg::Odometry;
 using tier4_autoware_utils::Point2d;
 using tier4_autoware_utils::Polygon2d;
 using vehicle_info_util::VehicleInfo;
+
+enum class CUT_IN_OUT {
+  NONE = 0,
+  CUT_IN = 1,
+  CUT_OUT = 2,
+};
 
 class AdaptiveCruiseControllerNode : public rclcpp::Node
 {
@@ -132,6 +140,28 @@ private:
   VehicleInfo vehicle_info_;
 
   std::shared_ptr<AdaptiveCruisePIDController> controller_ptr_;
+
+  // only for debug
+  void fillAndPublishDebugOutput(const PredictedObject & target_object);
+  void publishDebugOutputWithNoTarget();
+  double calcAcc(
+    const geometry_msgs::msg::TwistStamped & twist,
+    std::shared_ptr<geometry_msgs::msg::TwistStamped> & prev_twist, const double prev_acc,
+    const double lowpass_gain = 0.8, const double timeout = 1.0);
+
+  void resetObjectTwistHistory();
+  CUT_IN_OUT detectCutInAndOut(
+    AdaptiveCruiseInformation acc_info, const double threshold_length = 10.0);
+
+  geometry_msgs::msg::TwistStamped toTwistStamped(
+    const std_msgs::msg::Header & header, const geometry_msgs::msg::Twist & twist);
+
+  std::shared_ptr<AdaptiveCruiseControllerDebugNode> debug_node_ptr_;
+  std::shared_ptr<AdaptiveCruiseInformation> prev_acc_info_;
+  std::shared_ptr<geometry_msgs::msg::TwistStamped> prev_ego_twist_;
+  double ego_accel_ = 0.0;
+  std::shared_ptr<geometry_msgs::msg::TwistStamped> prev_object_twist_;
+  double obj_accel_ = 0.0;
 };
 
 }  // namespace motion_planning
