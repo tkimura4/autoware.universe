@@ -15,6 +15,14 @@
 #include <adaptive_cruise_controller/debug_marker.hpp>
 #include <tier4_autoware_utils/tier4_autoware_utils.hpp>
 
+#include <algorithm>
+#include <limits>
+#include <map>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
 namespace motion_planning
 {
 

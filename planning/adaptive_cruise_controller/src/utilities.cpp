@@ -14,6 +14,14 @@
 
 #include <adaptive_cruise_controller/utilities.hpp>
 
+#include <algorithm>
+#include <limits>
+#include <map>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
 namespace motion_planning
 {
 
@@ -216,6 +224,30 @@ geometry_msgs::msg::Pose lerpByPose(
   pose.position.z = tf_point.z();
   pose.orientation = tf2::toMsg(tf_quaternion);
   return pose;
+}
+
+bool isClockWise(const Polygon2d & polygon)
+{
+  const auto n = polygon.outer().size();
+
+  const double x_offset = polygon.outer().at(0).x();
+  const double y_offset = polygon.outer().at(0).y();
+  double sum = 0.0;
+  for (std::size_t i = 0; i < polygon.outer().size(); ++i) {
+    sum +=
+      (polygon.outer().at(i).x() - x_offset) * (polygon.outer().at((i + 1) % n).y() - y_offset) -
+      (polygon.outer().at(i).y() - y_offset) * (polygon.outer().at((i + 1) % n).x() - x_offset);
+  }
+  return sum < 0.0;
+}
+
+Polygon2d inverseClockWise(const Polygon2d & polygon)
+{
+  const auto & poly = polygon.outer();
+  Polygon2d inverted_polygon;
+  inverted_polygon.outer().reserve(poly.size());
+  std::reverse_copy(poly.begin(), poly.end(), std::back_inserter(inverted_polygon.outer()));
+  return inverted_polygon;
 }
 
 }  // namespace motion_planning

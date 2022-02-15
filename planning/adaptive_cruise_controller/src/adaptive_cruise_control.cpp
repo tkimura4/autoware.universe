@@ -16,6 +16,14 @@
 #include <adaptive_cruise_controller/adaptive_cruise_control_core.hpp>
 #include <adaptive_cruise_controller/debug_marker.hpp>
 
+#include <algorithm>
+#include <limits>
+#include <map>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
 namespace motion_planning
 {
 AdaptiveCruiseControllerNode::AdaptiveCruiseControllerNode(const rclcpp::NodeOptions & options)
@@ -194,6 +202,125 @@ bool AdaptiveCruiseControllerNode::isDataReady()
   }
 
   return true;
+}
+
+TrajectoryPoints AdaptiveCruiseControllerNode::trimTrajectoryWithIndexFromSelfPose(
+  const TrajectoryPoints & input, const geometry_msgs::msg::PoseStamped & self_pose)
+{
+  TrajectoryPoints output{};
+
+  double min_distance = 0.0;
+  size_t min_distance_index = 0;
+  bool is_init = false;
+  for (size_t i = 0; i < input.size(); ++i) {
+    const double x = input.at(i).pose.position.x - self_pose.pose.position.x;
+    const double y = input.at(i).pose.position.y - self_pose.pose.position.y;
+    const double squared_distance = x * x + y * y;
+    if (!is_init || squared_distance < min_distance * min_distance) {
+      is_init = true;
+      min_distance = std::sqrt(squared_distance);
+      min_distance_index = i;
+    }
+  }
+  for (size_t i = min_distance_index; i < input.size(); ++i) {
+    output.push_back(input.at(i));
+  }
+
+  return output;
+}
+
+TrajectoryPoint AdaptiveCruiseControllerNode::getExtendTrajectoryPoint(
+  const double extend_distance, const TrajectoryPoint & goal_point)
+{
+  tf2::Transform map2goal;
+  tf2::fromMsg(goal_point.pose, map2goal);
+  tf2::Transform local_extend_point;
+  local_extend_point.setOrigin(tf2::Vector3(extend_distance, 0.0, 0.0));
+  tf2::Quaternion q;
+  q.setRPY(0, 0, 0);
+  local_extend_point.setRotation(q);
+  const auto map2extend_point = map2goal * local_extend_point;
+  geometry_msgs::msg::Pose extend_pose;
+  tf2::toMsg(map2extend_point, extend_pose);
+  TrajectoryPoint extend_trajectory_point;
+  extend_trajectory_point.pose = extend_pose;
+  extend_trajectory_point.longitudinal_velocity_mps = goal_point.longitudinal_velocity_mps;
+  extend_trajectory_point.lateral_velocity_mps = goal_point.lateral_velocity_mps;
+  extend_trajectory_point.acceleration_mps2 = goal_point.acceleration_mps2;
+  return extend_trajectory_point;
+}
+
+TrajectoryPoints AdaptiveCruiseControllerNode::extendTrajectory(
+  const TrajectoryPoints & input, const double extend_distance)
+{
+  TrajectoryPoints output = input;
+
+  if (extend_distance < std::numeric_limits<double>::epsilon()) {
+    return output;
+  }
+
+  const auto goal_point = input.back();
+  double interpolation_distance = 0.1;
+
+  double extend_sum = 0.0;
+  while (extend_sum <= (extend_distance - interpolation_distance)) {
+    const auto extend_trajectory_point = getExtendTrajectoryPoint(extend_sum, goal_point);
+    output.push_back(extend_trajectory_point);
+    extend_sum += interpolation_distance;
+  }
+  const auto extend_trajectory_point = getExtendTrajectoryPoint(extend_distance, goal_point);
+  output.push_back(extend_trajectory_point);
+
+  return output;
+}
+
+TrajectoryPoints AdaptiveCruiseControllerNode::decimateTrajectory(
+  const TrajectoryPoints & input, const double step_length)
+{
+  TrajectoryPoints output{};
+
+  if (input.empty()) {
+    return output;
+  }
+
+  double trajectory_length_sum = 0.0;
+  double next_length = 0.0;
+
+  for (int i = 0; i < static_cast<int>(input.size()) - 1; ++i) {
+    const auto & p_front = input.at(i);
+    const auto & p_back = input.at(i + 1);
+    constexpr double epsilon = 1e-3;
+
+    if (next_length <= trajectory_length_sum + epsilon) {
+      const auto p_interpolate =
+        getBackwardPointFromBasePoint(p_front, p_back, p_back, next_length - trajectory_length_sum);
+      output.push_back(p_interpolate);
+      next_length += step_length;
+      continue;
+    }
+
+    trajectory_length_sum += tier4_autoware_utils::calcDistance2d(p_front, p_back);
+  }
+
+  output.push_back(input.back());
+
+  return output;
+}
+
+TrajectoryPoint AdaptiveCruiseControllerNode::getBackwardPointFromBasePoint(
+  const TrajectoryPoint & p_from, const TrajectoryPoint & p_to, const TrajectoryPoint & p_base,
+  const double backward_length)
+{
+  TrajectoryPoint output;
+  const double dx = p_to.pose.position.x - p_from.pose.position.x;
+  const double dy = p_to.pose.position.y - p_from.pose.position.y;
+  const double norm = std::hypot(dx, dy);
+
+  output = p_base;
+  output.pose.position.x += backward_length * dx / norm;
+  output.pose.position.y += backward_length * dy / norm;
+
+  return output;
 }
 
 VelocityLimit AdaptiveCruiseControllerNode::createVelocityLimitMsg(
@@ -384,30 +511,6 @@ bool AdaptiveCruiseControllerNode::isObjectVelocityHigh(const PredictedObject & 
   return object_velocity > acc_param_.object_low_velocity_thresh;
 }
 
-bool AdaptiveCruiseControllerNodeisClockWise(const Polygon2d & polygon)
-{
-  const auto n = polygon.outer().size();
-
-  const double x_offset = polygon.outer().at(0).x();
-  const double y_offset = polygon.outer().at(0).y();
-  double sum = 0.0;
-  for (std::size_t i = 0; i < polygon.outer().size(); ++i) {
-    sum +=
-      (polygon.outer().at(i).x() - x_offset) * (polygon.outer().at((i + 1) % n).y() - y_offset) -
-      (polygon.outer().at(i).y() - y_offset) * (polygon.outer().at((i + 1) % n).x() - x_offset);
-  }
-  return sum < 0.0;
-}
-
-Polygon2d AdaptiveCruiseControllerNodeinverseClockWise(const Polygon2d & polygon)
-{
-  const auto & poly = polygon.outer();
-  Polygon2d inverted_polygon;
-  inverted_polygon.outer().reserve(poly.size());
-  std::reverse_copy(poly.begin(), poly.end(), std::back_inserter(inverted_polygon.outer()));
-  return inverted_polygon;
-}
-
 /* only for debug */
 
 void AdaptiveCruiseControllerNode::publishDebugOutputWithNoTarget()
@@ -426,37 +529,34 @@ void AdaptiveCruiseControllerNode::publishDebugOutputWithNoTarget()
 
 void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObject & target_object)
 {
-  // for debug
-  {
-    const auto acc_info_ptr = controller_ptr_->getAccInfoPtr();
-    const auto prev_acc_info_ptr = controller_ptr_->getPrevAccInfoPtr();
-    const auto acc_motion = controller_ptr_->getAccMotion();
-    const auto acc_state = controller_ptr_->getState();
+  const auto acc_info_ptr = controller_ptr_->getAccInfoPtr();
+  const auto prev_acc_info_ptr = controller_ptr_->getPrevAccInfoPtr();
+  const auto acc_motion = controller_ptr_->getAccMotion();
+  const auto acc_state = controller_ptr_->getState();
 
-    // correct object twist
-    auto target_object_abs_twist = target_object;
-    auto & obj_twist =
-      target_object_abs_twist.kinematics.initial_twist_with_covariance.twist.linear.x;
-    obj_twist = std::fabs(obj_twist);
+  // correct object twist
+  auto target_object_abs_twist = target_object;
+  auto & obj_twist =
+    target_object_abs_twist.kinematics.initial_twist_with_covariance.twist.linear.x;
+  obj_twist = std::fabs(obj_twist);
 
-    // calculate ego-vehicle acceleration
-    const auto ego_twist_stamped =
-      toTwistStamped(current_odometry_ptr_->header, current_odometry_ptr_->twist.twist);
-    ego_accel_ = calcAcc(ego_twist_stamped, prev_ego_twist_, ego_accel_);
+  // calculate ego-vehicle acceleration
+  const auto ego_twist_stamped =
+    toTwistStamped(current_odometry_ptr_->header, current_odometry_ptr_->twist.twist);
+  ego_accel_ = calcAcc(ego_twist_stamped, prev_ego_twist_, ego_accel_);
 
-    // calculate target-object acceleration
-    const auto obj_twist_stamped = toTwistStamped(
-      current_objects_ptr_->header,
-      target_object_abs_twist.kinematics.initial_twist_with_covariance.twist);
+  // calculate target-object acceleration
+  const auto obj_twist_stamped = toTwistStamped(
+    current_objects_ptr_->header,
+    target_object_abs_twist.kinematics.initial_twist_with_covariance.twist);
 
-    const auto cut_in_out = acc_info_ptr ? CUT_IN_OUT::NONE : detectCutInAndOut(*acc_info_ptr);
+  const auto cut_in_out = acc_info_ptr ? CUT_IN_OUT::NONE : detectCutInAndOut(*acc_info_ptr);
 
-    if (cut_in_out == CUT_IN_OUT::NONE) {
-      obj_accel_ = calcAcc(obj_twist_stamped, prev_object_twist_, obj_accel_);
-    } else {
-      prev_object_twist_.reset();
-      obj_accel_ = 0.0;
-    }
+  if (cut_in_out == CUT_IN_OUT::NONE) {
+    obj_accel_ = calcAcc(obj_twist_stamped, prev_object_twist_, obj_accel_);
+  } else {
+    prev_object_twist_.reset();
+    obj_accel_ = 0.0;
 
     // calculate target-object velocity by differential of distance to object from ego-vehicle
     double object_vel_by_diff_target_dist = 0.0;

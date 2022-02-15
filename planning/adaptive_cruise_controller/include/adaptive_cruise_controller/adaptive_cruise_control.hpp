@@ -18,9 +18,6 @@
 #include <adaptive_cruise_controller/adaptive_cruise_control_core.hpp>
 #include <adaptive_cruise_controller/debug_marker.hpp>
 #include <adaptive_cruise_controller/utilities.hpp>
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <tier4_autoware_utils/trajectory/tmp_conversion.hpp>
 #include <vehicle_info_util/vehicle_info_util.hpp>
@@ -111,8 +108,13 @@ private:
   bool isDataReady();
   TrajectoryPoints trimTrajectoryWithIndexFromSelfPose(
     const TrajectoryPoints & input, const geometry_msgs::msg::PoseStamped & self_pose);
+  TrajectoryPoint getExtendTrajectoryPoint(
+    const double extend_distance, const TrajectoryPoint & goal_point);
   TrajectoryPoints extendTrajectory(const TrajectoryPoints & input, const double extend_distance);
   TrajectoryPoints decimateTrajectory(const TrajectoryPoints & input, const double step_length);
+  TrajectoryPoint getBackwardPointFromBasePoint(
+    const TrajectoryPoint & p_from, const TrajectoryPoint & p_to, const TrajectoryPoint & p_base,
+    const double backward_length);
   void createPolygonFromTrajectoryPoints(
     const TrajectoryPoints & trajectory_points, const double expand_width,
     std::vector<Polygon2d> & polygon);

@@ -14,6 +14,14 @@
 
 #include <adaptive_cruise_controller/adaptive_cruise_control_core.hpp>
 
+#include <algorithm>
+#include <limits>
+#include <map>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
 namespace motion_planning
 {
 

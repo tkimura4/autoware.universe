@@ -13,9 +13,7 @@ endif()
 find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
 
-find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
-find_package(PCL REQUIRED)
 
 ament_auto_add_library(adaptive_cruise_controller SHARED
   src/adaptive_cruise_control.cpp
@@ -30,6 +28,9 @@ target_include_directories(adaptive_cruise_controller
     ${OpenCV_INCLUDE_DIRS}
 )
 
+target_link_libraries(adaptive_cruise_controller
+  ${OpenCV_LIBRARIES}
+)
 
 
 rclcpp_components_register_node(adaptive_cruise_controller

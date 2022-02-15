@@ -14,6 +14,14 @@
 
 #include <adaptive_cruise_controller/acc_pid.hpp>
 
+#include <algorithm>
+#include <limits>
+#include <map>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
 namespace motion_planning
 {
 
