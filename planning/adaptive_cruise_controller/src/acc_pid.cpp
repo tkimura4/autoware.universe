@@ -61,7 +61,7 @@ void AccPidNode::updateState(
   }
 
   // if current distance to object is too short, change state to STOP
-  if (calcEmergencyDistFromVel(obstacle_velocity, ego_velocity) < dist_to_obstacle) {
+  if (calcEmergencyDistFromVel(obstacle_velocity, ego_velocity) > dist_to_obstacle) {
     current_state_ = State::STOP;
   }
 }
@@ -159,6 +159,7 @@ TrajectoryPoints AccPidNode::insertStopPoint(
   // calulcate stop index and stop point
   double accumulated_length = 0;
   double insert_idx = 0;
+  bool find_idx = false;
   for (size_t i = 1; i < trajectory_points.size(); i++) {
     const auto prev_pose = trajectory_points.at(i - 1).pose;
     const auto curr_pose = trajectory_points.at(i).pose;
@@ -168,8 +169,17 @@ TrajectoryPoints AccPidNode::insertStopPoint(
       insert_idx = i;
       const double ratio = 1 - (accumulated_length - stop_distance) / segment_length;
       stop_pose = lerpByPose(prev_pose, curr_pose, ratio);
+      find_idx = true;
       break;
     }
+  }
+
+  if (!find_idx) {
+    // insert stop velocity to the last point of trajectory
+    stop_pose = trajectory_points.back().pose;
+    trajectory_with_stop_point.back().longitudinal_velocity_mps = 0.0;
+    trajectory_with_stop_point.back().lateral_velocity_mps = 0.0;
+    return trajectory_with_stop_point;
   }
 
   // insert stop point

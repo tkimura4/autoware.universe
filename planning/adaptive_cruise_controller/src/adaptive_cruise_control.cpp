@@ -529,6 +529,7 @@ void AdaptiveCruiseControllerNode::publishDebugOutputWithNoTarget()
   debug_node_ptr_->setDebugValues(
     DebugValues::TYPE::CURRENT_VEL, current_odometry_ptr_->twist.twist.linear.x);
   debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_ACC, ego_accel_);
+  debug_node_ptr_->setDebugValues(DebugValues::TYPE::FLAG_NONE, 1.0);
   debug_node_ptr_->publish();
 }
 
@@ -606,8 +607,14 @@ void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObje
   debug_node_ptr_->setTargetPolygon(target_object);
   if (acc_state == State::ACC) {
     const auto target_object_pose = target_object.kinematics.initial_pose_with_covariance.pose;
-    const auto offset = acc_param_.minimum_margin_distance + target_object.shape.dimensions.x / 2.0;
-    debug_node_ptr_->setVirtualWall(target_object_pose, offset, true);
+    const auto closet_pose =
+      tier4_autoware_utils::findNearestIndex(acc_info_ptr->original_trajectory, target_object_pose);
+    if (closet_pose) {
+      const auto offset =
+        acc_param_.minimum_margin_distance + target_object.shape.dimensions.x / 2.0;
+      debug_node_ptr_->setVirtualWall(
+        acc_info_ptr->original_trajectory.at(*closet_pose).pose, -offset, false);
+    }
 
   } else if (acc_state == State::STOP) {
     const auto stop_pose = controller_ptr_->getAccMotion().stop_pose;
