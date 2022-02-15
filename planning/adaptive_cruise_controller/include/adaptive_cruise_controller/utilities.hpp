@@ -102,9 +102,9 @@ bool isPathNearTrajectory(
   const PredictedPath & path, const TrajectoryPoints & trajectory_points,
   const double threshold_dist, const double threshold_angle, const double minmum_overlap_time);
 
-void convertObjectToBoostPolygon(const PredictedObject & object, Polygon2d object_polygon);
+void convertObjectToBoostPolygon(const PredictedObject & object, Polygon2d & object_polygon);
 void convertcvPointsToBoostPolygon(
-  const std::vector<cv::Point2d> & points, Polygon2d object_polygon);
+  const std::vector<cv::Point2d> & points, Polygon2d & object_polygon);
 bool isClockWise(const Polygon2d & polygon);
 Polygon2d inverseClockWise(const Polygon2d & polygon);
 geometry_msgs::msg::Pose lerpByPose(

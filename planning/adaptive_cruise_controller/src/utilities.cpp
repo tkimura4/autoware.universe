@@ -144,7 +144,7 @@ bool isPathNearTrajectory(
   return true;
 }
 
-void convertObjectToBoostPolygon(const PredictedObject & object, Polygon2d object_polygon)
+void convertObjectToBoostPolygon(const PredictedObject & object, Polygon2d & object_polygon)
 {
   if (object.shape.type == autoware_auto_perception_msgs::msg::Shape::BOUNDING_BOX) {
     const auto & pose = object.kinematics.initial_pose_with_covariance.pose;
@@ -200,7 +200,8 @@ void convertObjectToBoostPolygon(const PredictedObject & object, Polygon2d objec
   object_polygon = isClockWise(object_polygon) ? object_polygon : inverseClockWise(object_polygon);
 }
 
-void convertcvPointsToBoostPolygon(const std::vector<cv::Point2d> & points, Polygon2d boost_polygon)
+void convertcvPointsToBoostPolygon(
+  const std::vector<cv::Point2d> & points, Polygon2d & boost_polygon)
 {
   for (const auto & point : points) {
     boost_polygon.outer().push_back(bg::make<Point2d>(point.x, point.y));
