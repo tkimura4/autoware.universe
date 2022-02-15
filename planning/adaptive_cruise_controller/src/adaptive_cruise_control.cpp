@@ -105,6 +105,7 @@ void AdaptiveCruiseControllerNode::onTrajectory(const Trajectory::ConstSharedPtr
   if (decimate_trajectory.size() < 2) {
     RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "trajectory is too short.");
     pub_trajectory_->publish(*msg);
+    return;
   }
 
   // create rough detection area
@@ -130,6 +131,7 @@ void AdaptiveCruiseControllerNode::onTrajectory(const Trajectory::ConstSharedPtr
     // no target object
     publishDebugOutputWithNoTarget();
     pub_trajectory_->publish(*msg);
+    return;
   }
 
   // get nearest object from target object
