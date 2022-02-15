@@ -35,32 +35,34 @@ void AccPidNode::updateState(
   const double dist_to_obstacle)
 {
   if (!prev_acc_info_ptr_) {
-    current_state = State::NONE;
+    current_state_ = State::NONE;
+    return;
   }
 
   if (
     (current_time - prev_acc_info_ptr_->info_time).seconds() > acc_param_.reset_time_to_acc_state) {
     // reset current_state if previous acc_time is too old
-    current_state = State::NONE;
+    current_state_ = State::NONE;
+    return;
   }
 
   double thresh_velocity = acc_param_.object_low_velocity_thresh;
 
   // provide a hysteresis in the state to prevent chattering
-  if (current_state == State::STOP) {
+  if (current_state_ == State::STOP) {
     thresh_velocity += acc_param_.object_velocity_hysteresis_margin;
   }
 
   // change state depending on obstacle velocity
   if (obstacle_velocity >= thresh_velocity) {
-    current_state = State::ACC;
+    current_state_ = State::ACC;
   } else {
-    current_state = State::STOP;
+    current_state_ = State::STOP;
   }
 
   // if current distance to object is too short, change state to STOP
   if (calcEmergencyDistFromVel(obstacle_velocity, ego_velocity) < dist_to_obstacle) {
-    current_state = State::STOP;
+    current_state_ = State::STOP;
   }
 }
 
@@ -70,10 +72,10 @@ void AccPidNode::calculate(const AdaptiveCruiseInformation & acc_info, AccMotion
     acc_info.info_time, acc_info.current_ego_velocity, acc_info.current_object_velocity,
     acc_info.current_distance_to_object);
 
-  if (current_state == State::STOP) {
+  if (current_state_ == State::STOP) {
     acc_motion.use_target_motion = false;
     calcTrajectoryWithStopPoints(acc_info, acc_motion);
-  } else if (current_state == State::ACC) {
+  } else if (current_state_ == State::ACC) {
     calculateTargetMotion(acc_info, acc_motion);
     acc_motion.use_trajectory = false;
   }

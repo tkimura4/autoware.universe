@@ -72,6 +72,7 @@ AdaptiveCruiseControllerNode::AdaptiveCruiseControllerNode(const rclcpp::NodeOpt
 
   // publishers, subscribers
   pub_trajectory_ = create_publisher<Trajectory>("~/output/trajectory", 1);
+  pub_velocity_limit_ = create_publisher<VelocityLimit>("~/output/velocity_limit", 1);
 
   sub_trajectory_ = create_subscription<Trajectory>(
     "~/input/trajectory", 1, std::bind(&AdaptiveCruiseControllerNode::onTrajectory, this, _1));
@@ -155,7 +156,7 @@ void AdaptiveCruiseControllerNode::onTrajectory(const Trajectory::ConstSharedPtr
     double target_acceleration;
     double target_jerk;
     if (controller_ptr_->getTargetMotion(target_velocity, target_acceleration, target_jerk)) {
-      pub_veloity_limit_->publish(
+      pub_velocity_limit_->publish(
         createVelocityLimitMsg(target_velocity, target_acceleration, target_jerk));
     }
 
@@ -168,6 +169,8 @@ void AdaptiveCruiseControllerNode::onTrajectory(const Trajectory::ConstSharedPtr
   auto output_trajectory = tier4_autoware_utils::convertToTrajectory(output);
   output_trajectory.header = msg->header;
   pub_trajectory_->publish(output_trajectory);
+
+  // TODO(kimura) send emergency flag
 
   // for debug
   fillAndPublishDebugOutput(nearest_target_object);

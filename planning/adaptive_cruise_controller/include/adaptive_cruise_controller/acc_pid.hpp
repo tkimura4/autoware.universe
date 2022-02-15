@@ -29,9 +29,8 @@ public:
   void updateState(
     const rclcpp::Time & current_time, const double ego_velocity, const double obstacle_velocity,
     const double dist_to_obstacle);
+  State getState() { return current_state_; }
   void calculate(const AdaptiveCruiseInformation & acc_info, AccMotion & acc_motion);
-
-  State current_state = State::NONE;
 
 private:
   double calcStoppingDistFromCurrentVel(const double current_velocity);
@@ -45,6 +44,7 @@ private:
 
   double baselink2front_;
   AccParam acc_param_;
+  State current_state_ = State::NONE;
   std::shared_ptr<AdaptiveCruiseInformation> prev_acc_info_ptr_;
 };
 

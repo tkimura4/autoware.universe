@@ -109,7 +109,7 @@ State AdaptiveCruiseControlCore::getState()
   if (!acc_pid_node_ptr_) {
     return State::NONE;
   }
-  return acc_pid_node_ptr_->current_state;
+  return acc_pid_node_ptr_->getState();
 }
 
 bool AdaptiveCruiseControlCore::getTargetMotion(

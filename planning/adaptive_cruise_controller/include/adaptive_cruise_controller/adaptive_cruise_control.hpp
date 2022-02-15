@@ -94,7 +94,7 @@ private:
   AccParam acc_param_;
 
   rclcpp::Publisher<Trajectory>::SharedPtr pub_trajectory_;
-  rclcpp::Publisher<VelocityLimit>::SharedPtr pub_veloity_limit_;
+  rclcpp::Publisher<VelocityLimit>::SharedPtr pub_velocity_limit_;
   rclcpp::Subscription<Trajectory>::SharedPtr sub_trajectory_;
   rclcpp::Subscription<PredictedObjects>::SharedPtr sub_objects_;
   rclcpp::Subscription<Odometry>::SharedPtr sub_odometry_;
