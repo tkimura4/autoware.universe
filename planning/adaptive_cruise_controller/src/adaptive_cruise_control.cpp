@@ -24,10 +24,30 @@ AdaptiveCruiseControllerNode::AdaptiveCruiseControllerNode(const rclcpp::NodeOpt
   using std::placeholders::_1;
 
   // set param
-  // TODO
+  param_.decimate_step_length = declare_parameter("decimate_step_length", 1.0);
+  param_.trajectory_extend_length = declare_parameter("trajectory_extend_length", 5.0);
+  param_.rough_detection_area_expand_length =
+    declare_parameter("rough_detection_area_expand_length", 3.0);
+  param_.detection_area_expand_length = declare_parameter("detection_area_expand_length", 1.0);
+  param_.object_threshold_angle = declare_parameter("object_threshold_angle", M_PI / 6.0);
+  param_.predicted_path_threshold_angle =
+    declare_parameter("predicted_path_threshold_angle", M_PI / 6.0);
+  param_.mininum_overlap_time_of_predicted_path =
+    declare_parameter("mininum_overlap_time_of_predicted_path", 1.0);
 
   // set acc param
-  // TODO
+  acc_param_.object_low_velocity_thresh = declare_parameter("object_low_velocity_thresh", -2.0);
+  acc_param_.object_velocity_hysteresis_margin =
+    declare_parameter("object_velocity_hysteresis_margin", -1.0);
+  acc_param_.reset_time_to_acc_state = declare_parameter("reset_time_to_acc_state", 1.0);
+  acc_param_.acc_min_acceleration = declare_parameter("acc_min_acceleration", -1.5);
+  acc_param_.acc_min_jerk = declare_parameter("acc_min_jerk", -1.0);
+  acc_param_.stop_min_acceleration = declare_parameter("stop_min_acceleration", -3.0);
+  acc_param_.object_min_acceleration = declare_parameter("object_min_acceleration", -3.0);
+  acc_param_.minimum_margin_distance = declare_parameter("minimum_margin_distance", -5.0);
+  acc_param_.idling_time = declare_parameter("idling_time", -1.0);
+  acc_param_.breaking_delay_time = declare_parameter("breaking_delay_time", -0.5);
+  acc_param_.p_term_in_velocity_pid = declare_parameter("p_term_in_velocity_pid", 0.5);
 
   // vehicle parameters
   vehicle_info_ = vehicle_info_util::VehicleInfoUtil(*this).getVehicleInfo();
