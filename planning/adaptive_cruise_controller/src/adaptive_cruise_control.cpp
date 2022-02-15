@@ -45,6 +45,7 @@ AdaptiveCruiseControllerNode::AdaptiveCruiseControllerNode(const rclcpp::NodeOpt
 
   // set acc param
   acc_param_.object_low_velocity_thresh = declare_parameter("object_low_velocity_thresh", 3.0);
+  acc_param_.object_stop_velocity_thresh = declare_parameter("object_stop_velocity_thresh", 1.0);
   acc_param_.object_velocity_hysteresis_margin =
     declare_parameter("object_velocity_hysteresis_margin", 1.0);
   acc_param_.reset_time_to_acc_state = declare_parameter("reset_time_to_acc_state", 1.0);
@@ -483,16 +484,33 @@ PredictedPath AdaptiveCruiseControllerNode::getHighestConfidencePathFromObject(
 
 geometry_msgs::msg::Pose AdaptiveCruiseControllerNode::getObjectPose(const PredictedObject & object)
 {
-  if (object.kinematics.initial_twist_with_covariance.twist.linear.x >= 0) {
+  const double object_velocity = object.kinematics.initial_twist_with_covariance.twist.linear.x;
+  auto obj_pose = object.kinematics.initial_pose_with_covariance.pose;
+  double obj_yaw, obj_pitch, obj_roll;
+  tf2::getEulerYPR(obj_pose.orientation, obj_yaw, obj_pitch, obj_roll);
+
+  // If the object is stopped, align object orientation to ego vehicle
+  if (std::fabs(object_velocity) < acc_param_.object_stop_velocity_thresh) {
+    const auto ego_yaw = tf2::getYaw(current_pose_->pose.orientation);
+    const auto diff_yaw = tier4_autoware_utils::normalizeRadian(ego_yaw - obj_yaw);
+    if (std::fabs(diff_yaw) < M_PI / 2.0) {
+      return obj_pose;
+    }
+    // If the pose of the object and ego-vehicle are in opposite directions,
+    // invert yaw-angle
+    tf2::Quaternion inv_q;
+    inv_q.setRPY(obj_roll, obj_pitch, obj_yaw + M_PI);
+    obj_pose.orientation = tf2::toMsg(inv_q);
+    return obj_pose;
+  }
+
+  if (object_velocity >= 0) {
     return object.kinematics.initial_pose_with_covariance.pose;
   }
 
   // If the object velocity is negative, invert yaw-angle
-  auto obj_pose = object.kinematics.initial_pose_with_covariance.pose;
-  double yaw, pitch, roll;
-  tf2::getEulerYPR(obj_pose.orientation, yaw, pitch, roll);
   tf2::Quaternion inv_q;
-  inv_q.setRPY(roll, pitch, yaw + M_PI);
+  inv_q.setRPY(obj_roll, obj_pitch, obj_yaw + M_PI);
   obj_pose.orientation = tf2::toMsg(inv_q);
   return obj_pose;
 }

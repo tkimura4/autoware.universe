@@ -6,11 +6,12 @@
     detection_area_expand_length: 0.0
     object_threshold_angle: 0.523
     predicted_path_threshold_angle: 0.523
-    mininum_overlap_time_of_predicted_path: 1.0
+    mininum_overlap_time_of_predicted_path: 2.0
 
 
 
     object_low_velocity_thresh: 3.0 # if object velocity is lower than this value, adaptive cruise becomes disable.
+    object_stop_velocity_thresh: 1.0 # if object velocity is lower than this value, ignore the sign of object orientation
     object_velocity_hysteresis_margin: 1.0 # hysteresis margin to change acc state for preventing chattering
     reset_time_to_acc_state: 1.0
     acc_min_acceleration: -1.5

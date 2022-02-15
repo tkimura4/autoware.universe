@@ -48,6 +48,7 @@ using tier4_autoware_utils::Polygon2d;
 struct AccParam
 {
   double object_low_velocity_thresh;
+  double object_stop_velocity_thresh;
   double object_velocity_hysteresis_margin;
   double reset_time_to_acc_state;
   double acc_min_acceleration;
