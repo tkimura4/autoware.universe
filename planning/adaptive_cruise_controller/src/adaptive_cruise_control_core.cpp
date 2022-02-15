@@ -27,6 +27,7 @@ namespace motion_planning
 
 AdaptiveCruiseControlCore::AdaptiveCruiseControlCore(
   const double baselink2front, const AccParam & acc_param)
+: acc_param_(acc_param)
 {
   acc_pid_node_ptr_ = std::make_shared<AccPidNode>(baselink2front, acc_param);
 }

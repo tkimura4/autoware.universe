@@ -607,7 +607,8 @@ void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObje
     DebugValues::TYPE::CURRENT_OBJECT_DISTANCE, acc_info_ptr->current_distance_to_object);
   debug_node_ptr_->setDebugValues(
     DebugValues::TYPE::CURRENT_OBJECT_VEL, acc_info_ptr->current_object_velocity);
-  debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_OBJECT_VEL_DIFF_DIST, 0.0);
+  debug_node_ptr_->setDebugValues(
+    DebugValues::TYPE::CURRENT_OBJECT_VEL_DIFF_DIST, object_vel_by_diff_target_dist);
   debug_node_ptr_->setDebugValues(
     DebugValues::TYPE::IDEAL_OBJECT_DISTANCE, acc_info_ptr->ideal_distance_to_object);
   debug_node_ptr_->setDebugValues(
