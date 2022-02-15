@@ -433,12 +433,21 @@ void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObje
     const auto acc_motion = controller_ptr_->getAccMotion();
     const auto acc_state = controller_ptr_->getState();
 
+    // correct object twist
+    auto target_object_abs_twist = target_object;
+    auto & obj_twist =
+      target_object_abs_twist.kinematics.initial_twist_with_covariance.twist.linear.x;
+    obj_twist = std::fabs(obj_twist);
+
+    // calculate ego-vehicle acceleration
     const auto ego_twist_stamped =
       toTwistStamped(current_odometry_ptr_->header, current_odometry_ptr_->twist.twist);
     ego_accel_ = calcAcc(ego_twist_stamped, prev_ego_twist_, ego_accel_);
 
+    // calculate target-object acceleration
     const auto obj_twist_stamped = toTwistStamped(
-      current_objects_ptr_->header, target_object.kinematics.initial_twist_with_covariance.twist);
+      current_objects_ptr_->header,
+      target_object_abs_twist.kinematics.initial_twist_with_covariance.twist);
 
     const auto cut_in_out = acc_info_ptr ? CUT_IN_OUT::NONE : detectCutInAndOut(*acc_info_ptr);
 
@@ -449,6 +458,7 @@ void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObje
       obj_accel_ = 0.0;
     }
 
+    // calculate target-object velocity by differential of distance to object from ego-vehicle
     double object_vel_by_diff_target_dist = 0.0;
     if (acc_info_ptr && prev_acc_info_ptr) {
       if (cut_in_out == CUT_IN_OUT::NONE) {
