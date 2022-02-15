@@ -36,18 +36,18 @@ AdaptiveCruiseControllerNode::AdaptiveCruiseControllerNode(const rclcpp::NodeOpt
     declare_parameter("mininum_overlap_time_of_predicted_path", 1.0);
 
   // set acc param
-  acc_param_.object_low_velocity_thresh = declare_parameter("object_low_velocity_thresh", -2.0);
+  acc_param_.object_low_velocity_thresh = declare_parameter("object_low_velocity_thresh", 3.0);
   acc_param_.object_velocity_hysteresis_margin =
-    declare_parameter("object_velocity_hysteresis_margin", -1.0);
+    declare_parameter("object_velocity_hysteresis_margin", 1.0);
   acc_param_.reset_time_to_acc_state = declare_parameter("reset_time_to_acc_state", 1.0);
   acc_param_.acc_min_acceleration = declare_parameter("acc_min_acceleration", -1.5);
   acc_param_.acc_min_jerk = declare_parameter("acc_min_jerk", -1.0);
   acc_param_.stop_min_acceleration = declare_parameter("stop_min_acceleration", -3.0);
   acc_param_.object_min_acceleration = declare_parameter("object_min_acceleration", -3.0);
-  acc_param_.minimum_margin_distance = declare_parameter("minimum_margin_distance", -5.0);
-  acc_param_.idling_time = declare_parameter("idling_time", -1.0);
-  acc_param_.breaking_delay_time = declare_parameter("breaking_delay_time", -0.5);
-  acc_param_.p_term_in_velocity_pid = declare_parameter("p_term_in_velocity_pid", 0.5);
+  acc_param_.minimum_margin_distance = declare_parameter("minimum_margin_distance", 5.0);
+  acc_param_.idling_time = declare_parameter("idling_time", 1.0);
+  acc_param_.breaking_delay_time = declare_parameter("breaking_delay_time", 0.5);
+  acc_param_.p_term_in_velocity_pid = declare_parameter("p_term_in_velocity_pid", 0.3);
 
   // vehicle parameters
   vehicle_info_ = vehicle_info_util::VehicleInfoUtil(*this).getVehicleInfo();
