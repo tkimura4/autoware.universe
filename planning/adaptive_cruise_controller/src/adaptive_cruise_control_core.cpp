@@ -49,6 +49,10 @@ void AdaptiveCruiseControlCore::calcInformationForAdaptiveCruise(
   dist_to_object += running_distance_in_delay;
 
   /* input acc information */
+  if (acc_info_ptr_) {
+    prev_acc_info_ptr_ = std::make_shared<AdaptiveCruiseInformation>(*acc_info_ptr_);
+  }
+
   acc_info_ptr_ = std::make_shared<AdaptiveCruiseInformation>();
   acc_info_ptr_->current_distance_to_object = dist_to_object;
   acc_info_ptr_->current_ego_velocity = odometry.twist.twist.linear.x;

@@ -35,7 +35,8 @@ class AdaptiveCruiseControlCore
 {
 public:
   explicit AdaptiveCruiseControlCore(const double baselink2front, const AccParam & acc_param);
-  AdaptiveCruiseInformation getAccInfo() { return *acc_info_ptr_; }
+  std::shared_ptr<AdaptiveCruiseInformation> getAccInfoPtr() { return acc_info_ptr_; }
+  std::shared_ptr<AdaptiveCruiseInformation> getPrevAccInfoPtr() { return prev_acc_info_ptr_; }
 
   void calcInformationForAdaptiveCruise(
     const TrajectoryPoints & trajectory_points, const geometry_msgs::msg::PoseStamped & pose,
@@ -56,6 +57,7 @@ private:
   std::shared_ptr<AccPidNode> acc_pid_node_ptr_;
   double prev_target_velocity_;
   std::shared_ptr<AdaptiveCruiseInformation> acc_info_ptr_;
+  std::shared_ptr<AdaptiveCruiseInformation> prev_acc_info_ptr_;
   AccMotion acc_motion_;
 
   // functions

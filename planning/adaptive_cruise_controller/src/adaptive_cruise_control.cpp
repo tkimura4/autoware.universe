@@ -408,7 +408,8 @@ void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObje
 {
   // for debug
   {
-    const auto acc_info = controller_ptr_->getAccInfo();
+    const auto acc_info_ptr = controller_ptr_->getAccInfoPtr();
+    const auto prev_acc_info_ptr = controller_ptr_->getPrevAccInfoPtr();
     const auto acc_motion = controller_ptr_->getAccMotion();
     const auto acc_state = controller_ptr_->getState();
 
@@ -419,13 +420,26 @@ void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObje
     const auto obj_twist_stamped = toTwistStamped(
       current_objects_ptr_->header, target_object.kinematics.initial_twist_with_covariance.twist);
 
-    const auto cut_in_out = detectCutInAndOut(acc_info);
+    const auto cut_in_out = acc_info_ptr ? CUT_IN_OUT::NONE : detectCutInAndOut(*acc_info_ptr);
 
     if (cut_in_out == CUT_IN_OUT::NONE) {
       obj_accel_ = calcAcc(obj_twist_stamped, prev_object_twist_, obj_accel_);
     } else {
       prev_object_twist_.reset();
       obj_accel_ = 0.0;
+    }
+
+    double object_vel_by_diff_target_dist = 0.0;
+    if (acc_info_ptr && prev_acc_info_ptr) {
+      if (cut_in_out == CUT_IN_OUT::NONE) {
+        const double diff_dist =
+          acc_info_ptr->current_distance_to_object - prev_acc_info_ptr->current_distance_to_object;
+        const double dt = (acc_info_ptr->info_time - prev_acc_info_ptr->info_time).seconds();
+        // calculate the speed of change of target distance
+        object_vel_by_diff_target_dist = dt > 0 ? diff_dist / dt : 0.0;
+        // remove the effect of own vehicle speed
+        object_vel_by_diff_target_dist -= current_odometry_ptr_->twist.twist.linear.x;
+      }
     }
 
     const auto target_velocity = acc_state == State::STOP ? 0.0 : acc_motion.target_velocity;
@@ -435,11 +449,12 @@ void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObje
     debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_ACC, ego_accel_);
     debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_OBJECT_ACC, obj_accel_);
     debug_node_ptr_->setDebugValues(
-      DebugValues::TYPE::CURRENT_OBJECT_DISTANCE, acc_info.current_distance_to_object);
+      DebugValues::TYPE::CURRENT_OBJECT_DISTANCE, acc_info_ptr->current_distance_to_object);
     debug_node_ptr_->setDebugValues(
-      DebugValues::TYPE::CURRENT_OBJECT_VEL, acc_info.current_object_velocity);
+      DebugValues::TYPE::CURRENT_OBJECT_VEL, acc_info_ptr->current_object_velocity);
+    debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_OBJECT_VEL_DIFF_DIST, 0.0);
     debug_node_ptr_->setDebugValues(
-      DebugValues::TYPE::IDEAL_OBJECT_DISTANCE, acc_info.ideal_distance_to_object);
+      DebugValues::TYPE::IDEAL_OBJECT_DISTANCE, acc_info_ptr->ideal_distance_to_object);
     debug_node_ptr_->setDebugValues(
       DebugValues::TYPE::FLAG_CUTIN_OBJECT, cut_in_out == CUT_IN_OUT::CUT_IN);
     debug_node_ptr_->setDebugValues(
