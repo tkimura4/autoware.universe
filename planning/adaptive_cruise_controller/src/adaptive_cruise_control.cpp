@@ -562,59 +562,58 @@ void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObje
   } else {
     prev_object_twist_.reset();
     obj_accel_ = 0.0;
-
-    // calculate target-object velocity by differential of distance to object from ego-vehicle
-    double object_vel_by_diff_target_dist = 0.0;
-    if (acc_info_ptr && prev_acc_info_ptr) {
-      if (cut_in_out == CUT_IN_OUT::NONE) {
-        const double diff_dist =
-          acc_info_ptr->current_distance_to_object - prev_acc_info_ptr->current_distance_to_object;
-        const double dt = (acc_info_ptr->info_time - prev_acc_info_ptr->info_time).seconds();
-        // calculate the speed of change of target distance
-        object_vel_by_diff_target_dist = dt > 0 ? diff_dist / dt : 0.0;
-        // remove the effect of own vehicle speed
-        object_vel_by_diff_target_dist -= current_odometry_ptr_->twist.twist.linear.x;
-      }
-    }
-
-    const auto target_velocity = acc_state == State::STOP ? 0.0 : acc_motion.target_velocity;
-
-    debug_node_ptr_->setDebugValues(
-      DebugValues::TYPE::CURRENT_VEL, current_odometry_ptr_->twist.twist.linear.x);
-    debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_ACC, ego_accel_);
-    debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_OBJECT_ACC, obj_accel_);
-    debug_node_ptr_->setDebugValues(
-      DebugValues::TYPE::CURRENT_OBJECT_DISTANCE, acc_info_ptr->current_distance_to_object);
-    debug_node_ptr_->setDebugValues(
-      DebugValues::TYPE::CURRENT_OBJECT_VEL, acc_info_ptr->current_object_velocity);
-    debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_OBJECT_VEL_DIFF_DIST, 0.0);
-    debug_node_ptr_->setDebugValues(
-      DebugValues::TYPE::IDEAL_OBJECT_DISTANCE, acc_info_ptr->ideal_distance_to_object);
-    debug_node_ptr_->setDebugValues(
-      DebugValues::TYPE::FLAG_CUTIN_OBJECT, cut_in_out == CUT_IN_OUT::CUT_IN);
-    debug_node_ptr_->setDebugValues(
-      DebugValues::TYPE::FLAG_CUTOUT_OBJECT, cut_in_out == CUT_IN_OUT::CUT_OUT);
-    debug_node_ptr_->setDebugValues(DebugValues::TYPE::FLAG_FIND_OBJECT, 1.0);
-    debug_node_ptr_->setDebugValues(
-      DebugValues::TYPE::FLAG_ADAPTIVE_CRUISE, (acc_state == State::ACC));
-    debug_node_ptr_->setDebugValues(DebugValues::TYPE::FLAG_STOP, (acc_state == State::STOP));
-    debug_node_ptr_->setDebugValues(DebugValues::TYPE::FLAG_NONE, 0.0);
-    debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_TARGET_VELOCITY, target_velocity);
-
-    debug_node_ptr_->clearMarker();
-    debug_node_ptr_->setTargetPolygon(target_object);
-    if (acc_state == State::ACC) {
-      const auto target_object_pose = target_object.kinematics.initial_pose_with_covariance.pose;
-      const auto offset =
-        acc_param_.minimum_margin_distance + target_object.shape.dimensions.x / 2.0;
-      debug_node_ptr_->setVirtualWall(target_object_pose, offset, true);
-
-    } else if (acc_state == State::STOP) {
-      const auto stop_pose = controller_ptr_->getAccMotion().stop_pose;
-      debug_node_ptr_->setVirtualWall(stop_pose, vehicle_info_.front_overhang_m, true);
-    }
-    debug_node_ptr_->publish();
   }
+
+  // calculate target-object velocity by differential of distance to object from ego-vehicle
+  double object_vel_by_diff_target_dist = 0.0;
+  if (acc_info_ptr && prev_acc_info_ptr) {
+    if (cut_in_out == CUT_IN_OUT::NONE) {
+      const double diff_dist =
+        acc_info_ptr->current_distance_to_object - prev_acc_info_ptr->current_distance_to_object;
+      const double dt = (acc_info_ptr->info_time - prev_acc_info_ptr->info_time).seconds();
+      // calculate the speed of change of target distance
+      object_vel_by_diff_target_dist = dt > 0 ? diff_dist / dt : 0.0;
+      // remove the effect of own vehicle speed
+      object_vel_by_diff_target_dist -= current_odometry_ptr_->twist.twist.linear.x;
+    }
+  }
+
+  const auto target_velocity = acc_state == State::STOP ? 0.0 : acc_motion.target_velocity;
+
+  debug_node_ptr_->setDebugValues(
+    DebugValues::TYPE::CURRENT_VEL, current_odometry_ptr_->twist.twist.linear.x);
+  debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_ACC, ego_accel_);
+  debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_OBJECT_ACC, obj_accel_);
+  debug_node_ptr_->setDebugValues(
+    DebugValues::TYPE::CURRENT_OBJECT_DISTANCE, acc_info_ptr->current_distance_to_object);
+  debug_node_ptr_->setDebugValues(
+    DebugValues::TYPE::CURRENT_OBJECT_VEL, acc_info_ptr->current_object_velocity);
+  debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_OBJECT_VEL_DIFF_DIST, 0.0);
+  debug_node_ptr_->setDebugValues(
+    DebugValues::TYPE::IDEAL_OBJECT_DISTANCE, acc_info_ptr->ideal_distance_to_object);
+  debug_node_ptr_->setDebugValues(
+    DebugValues::TYPE::FLAG_CUTIN_OBJECT, cut_in_out == CUT_IN_OUT::CUT_IN);
+  debug_node_ptr_->setDebugValues(
+    DebugValues::TYPE::FLAG_CUTOUT_OBJECT, cut_in_out == CUT_IN_OUT::CUT_OUT);
+  debug_node_ptr_->setDebugValues(DebugValues::TYPE::FLAG_FIND_OBJECT, 1.0);
+  debug_node_ptr_->setDebugValues(
+    DebugValues::TYPE::FLAG_ADAPTIVE_CRUISE, (acc_state == State::ACC));
+  debug_node_ptr_->setDebugValues(DebugValues::TYPE::FLAG_STOP, (acc_state == State::STOP));
+  debug_node_ptr_->setDebugValues(DebugValues::TYPE::FLAG_NONE, 0.0);
+  debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_TARGET_VELOCITY, target_velocity);
+
+  debug_node_ptr_->clearMarker();
+  debug_node_ptr_->setTargetPolygon(target_object);
+  if (acc_state == State::ACC) {
+    const auto target_object_pose = target_object.kinematics.initial_pose_with_covariance.pose;
+    const auto offset = acc_param_.minimum_margin_distance + target_object.shape.dimensions.x / 2.0;
+    debug_node_ptr_->setVirtualWall(target_object_pose, offset, true);
+
+  } else if (acc_state == State::STOP) {
+    const auto stop_pose = controller_ptr_->getAccMotion().stop_pose;
+    debug_node_ptr_->setVirtualWall(stop_pose, vehicle_info_.front_overhang_m, true);
+  }
+  debug_node_ptr_->publish();
 }
 
 double AdaptiveCruiseControllerNode::calcAcc(
