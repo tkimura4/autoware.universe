@@ -603,7 +603,7 @@ void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObje
         acc_info_ptr->current_distance_to_object - prev_acc_info_ptr->current_distance_to_object;
       const double dt = (acc_info_ptr->info_time - prev_acc_info_ptr->info_time).seconds();
       // calculate the speed of change of target distance
-      object_vel_by_diff_target_dist = dt > 0 ? -diff_dist / dt : 0.0;
+      object_vel_by_diff_target_dist = dt > 0 ? diff_dist / dt : 0.0;
       // remove the effect of own vehicle speed
       object_vel_by_diff_target_dist += current_odometry_ptr_->twist.twist.linear.x;
     }
