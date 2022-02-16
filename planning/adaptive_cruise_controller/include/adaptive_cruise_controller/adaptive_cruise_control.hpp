@@ -94,6 +94,7 @@ private:
   AccParam acc_param_;
 
   rclcpp::Publisher<Trajectory>::SharedPtr pub_trajectory_;
+  rclcpp::Publisher<VelocityLimitClearCommand>::SharedPtr pub_clear_velocity_limit_;
   rclcpp::Publisher<VelocityLimit>::SharedPtr pub_velocity_limit_;
   rclcpp::Subscription<Trajectory>::SharedPtr sub_trajectory_;
   rclcpp::Subscription<PredictedObjects>::SharedPtr sub_objects_;
@@ -164,6 +165,8 @@ private:
   double ego_accel_ = 0.0;
   std::shared_ptr<geometry_msgs::msg::TwistStamped> prev_object_twist_;
   double obj_accel_ = 0.0;
+
+  bool need_to_clear_velocity_limit_ = false;
 };
 
 }  // namespace motion_planning

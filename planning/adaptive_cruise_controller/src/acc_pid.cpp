@@ -196,8 +196,8 @@ TrajectoryPoints AccPidNode::insertStopPoint(
   trajectory_with_stop_point.insert(trajectory_with_stop_point.begin() + insert_idx, stop_point);
   // set 0 velocity to points after the stop point
   for (size_t i = insert_idx; i < trajectory_with_stop_point.size(); i++) {
-    trajectory_with_stop_point.at(insert_idx).longitudinal_velocity_mps = 0.0;
-    trajectory_with_stop_point.at(insert_idx).lateral_velocity_mps = 0.0;
+    trajectory_with_stop_point.at(i).longitudinal_velocity_mps = 0.0;
+    trajectory_with_stop_point.at(i).lateral_velocity_mps = 0.0;
   }
   return trajectory_with_stop_point;
 }

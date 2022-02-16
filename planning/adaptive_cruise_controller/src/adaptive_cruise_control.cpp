@@ -74,6 +74,8 @@ AdaptiveCruiseControllerNode::AdaptiveCruiseControllerNode(const rclcpp::NodeOpt
   // publishers, subscribers
   pub_trajectory_ = create_publisher<Trajectory>("~/output/trajectory", 1);
   pub_velocity_limit_ = create_publisher<VelocityLimit>("~/output/velocity_limit", 1);
+  pub_clear_velocity_limit_ =
+    create_publisher<VelocityLimitClearCommand>("~/output/clear_velocity_limit", 1);
 
   sub_trajectory_ = create_subscription<Trajectory>(
     "~/input/trajectory", 1, std::bind(&AdaptiveCruiseControllerNode::onTrajectory, this, _1));
@@ -133,6 +135,10 @@ void AdaptiveCruiseControllerNode::onTrajectory(const Trajectory::ConstSharedPtr
     // no target object
     publishDebugOutputWithNoTarget();
     pub_trajectory_->publish(*msg);
+    if (need_to_clear_velocity_limit_) {
+      pub_clear_velocity_limit_->publish(createVelocityLimitClearCommandMsg());
+      need_to_clear_velocity_limit_ = false;
+    }
     return;
   }
 
@@ -159,6 +165,12 @@ void AdaptiveCruiseControllerNode::onTrajectory(const Trajectory::ConstSharedPtr
     if (controller_ptr_->getTargetMotion(target_velocity, target_acceleration, target_jerk)) {
       pub_velocity_limit_->publish(
         createVelocityLimitMsg(target_velocity, target_acceleration, target_jerk));
+      need_to_clear_velocity_limit_ = true;
+    } else {
+      if (need_to_clear_velocity_limit_) {
+        pub_clear_velocity_limit_->publish(createVelocityLimitClearCommandMsg());
+        need_to_clear_velocity_limit_ = false;
+      }
     }
 
     // get trajectory (If necessary, insert stop velocity.)
@@ -591,9 +603,9 @@ void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObje
         acc_info_ptr->current_distance_to_object - prev_acc_info_ptr->current_distance_to_object;
       const double dt = (acc_info_ptr->info_time - prev_acc_info_ptr->info_time).seconds();
       // calculate the speed of change of target distance
-      object_vel_by_diff_target_dist = dt > 0 ? diff_dist / dt : 0.0;
+      object_vel_by_diff_target_dist = dt > 0 ? -diff_dist / dt : 0.0;
       // remove the effect of own vehicle speed
-      object_vel_by_diff_target_dist -= current_odometry_ptr_->twist.twist.linear.x;
+      object_vel_by_diff_target_dist += current_odometry_ptr_->twist.twist.linear.x;
     }
   }
 
@@ -602,13 +614,13 @@ void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObje
   debug_node_ptr_->setDebugValues(
     DebugValues::TYPE::CURRENT_VEL, current_odometry_ptr_->twist.twist.linear.x);
   debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_ACC, ego_accel_);
-  debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_OBJECT_ACC, obj_accel_);
-  debug_node_ptr_->setDebugValues(
-    DebugValues::TYPE::CURRENT_OBJECT_DISTANCE, acc_info_ptr->current_distance_to_object);
   debug_node_ptr_->setDebugValues(
     DebugValues::TYPE::CURRENT_OBJECT_VEL, acc_info_ptr->current_object_velocity);
   debug_node_ptr_->setDebugValues(
     DebugValues::TYPE::CURRENT_OBJECT_VEL_DIFF_DIST, object_vel_by_diff_target_dist);
+  debug_node_ptr_->setDebugValues(DebugValues::TYPE::CURRENT_OBJECT_ACC, obj_accel_);
+  debug_node_ptr_->setDebugValues(
+    DebugValues::TYPE::CURRENT_OBJECT_DISTANCE, acc_info_ptr->current_distance_to_object);
   debug_node_ptr_->setDebugValues(
     DebugValues::TYPE::IDEAL_OBJECT_DISTANCE, acc_info_ptr->ideal_distance_to_object);
   debug_node_ptr_->setDebugValues(
@@ -684,6 +696,14 @@ CUT_IN_OUT AdaptiveCruiseControllerNode::detectCutInAndOut(
   AdaptiveCruiseInformation acc_info, const double threshold_length)
 {
   if (!prev_acc_info_) {
+    prev_acc_info_ = std::make_shared<AdaptiveCruiseInformation>(acc_info);
+    return CUT_IN_OUT::CUT_IN;
+  }
+
+  const double dt = (this->now() - prev_acc_info_->info_time).seconds();
+
+  if (dt > acc_param_.reset_time_to_acc_state) {
+    // previous acc info is too old.
     prev_acc_info_ = std::make_shared<AdaptiveCruiseInformation>(acc_info);
     return CUT_IN_OUT::CUT_IN;
   }
