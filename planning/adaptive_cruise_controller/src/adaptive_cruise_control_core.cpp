@@ -27,7 +27,7 @@ namespace motion_planning
 
 AdaptiveCruiseControlCore::AdaptiveCruiseControlCore(
   const double baselink2front, const AccParam & acc_param)
-: acc_param_(acc_param)
+: baselink2front_(baselink2front), acc_param_(acc_param)
 {
   acc_pid_node_ptr_ = std::make_shared<AccPidNode>(baselink2front, acc_param);
 }
@@ -70,6 +70,7 @@ void AdaptiveCruiseControlCore::calcInformationForAdaptiveCruise(
   acc_info_ptr_->ideal_distance_to_object =
     getIdealDistanceToObject(odometry.twist.twist.linear.x, object_velocity_along_traj);
   acc_info_ptr_->info_time = rclcpp::Time(pose.header.stamp);
+  acc_info_ptr_->current_ego_pose = pose.pose;
   acc_info_ptr_->target_object = object;
   acc_info_ptr_->original_trajectory = trajectory_points;
 }

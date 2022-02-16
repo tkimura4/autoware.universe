@@ -39,8 +39,8 @@ private:
   void calcTrajectoryWithStopPoints(
     const AdaptiveCruiseInformation & acc_info, AccMotion & acc_motion);
   TrajectoryPoints insertStopPoint(
-    const double stop_distance, const TrajectoryPoints & trajectory_points,
-    geometry_msgs::msg::Pose & stop_pose);
+    const double stop_distance_from_ego, const TrajectoryPoints & trajectory_points,
+    const geometry_msgs::msg::Pose & ego_pose, geometry_msgs::msg::Pose & stop_pose);
 
   double baselink2front_;
   AccParam acc_param_;

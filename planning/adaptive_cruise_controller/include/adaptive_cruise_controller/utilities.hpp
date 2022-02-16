@@ -82,6 +82,7 @@ struct AdaptiveCruiseInformation
   double current_object_velocity;
   double current_distance_to_object;
   double ideal_distance_to_object;
+  geometry_msgs::msg::Pose current_ego_pose;
   PredictedObject target_object;
   TrajectoryPoints original_trajectory;
 };

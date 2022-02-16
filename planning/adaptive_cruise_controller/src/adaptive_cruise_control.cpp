@@ -65,8 +65,8 @@ AdaptiveCruiseControllerNode::AdaptiveCruiseControllerNode(const rclcpp::NodeOpt
   debug_node_ptr_ = std::make_shared<AdaptiveCruiseControllerDebugNode>(this);
 
   // controller
-  controller_ptr_ =
-    std::make_shared<AdaptiveCruiseControlCore>(vehicle_info_.front_overhang_m, acc_param_);
+  controller_ptr_ = std::make_shared<AdaptiveCruiseControlCore>(
+    vehicle_info_.max_longitudinal_offset_m, acc_param_);
 
   // wait for self pose
   self_pose_listener_.waitForFirstPose();
@@ -637,7 +637,7 @@ void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObje
 
   } else if (acc_state == State::STOP) {
     const auto stop_pose = controller_ptr_->getAccMotion().stop_pose;
-    debug_node_ptr_->setVirtualWall(stop_pose, vehicle_info_.front_overhang_m, true);
+    debug_node_ptr_->setVirtualWall(stop_pose, vehicle_info_.max_longitudinal_offset_m, true);
   }
   debug_node_ptr_->publish();
 }

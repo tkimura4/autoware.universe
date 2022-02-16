@@ -141,14 +141,15 @@ void AccPidNode::calcTrajectoryWithStopPoints(
     acc_motion.emergency = true;
   }
 
-  acc_motion.planned_trajectory =
-    insertStopPoint(target_stop_dist, acc_info.original_trajectory, acc_motion.stop_pose);
+  acc_motion.planned_trajectory = insertStopPoint(
+    target_stop_dist, acc_info.original_trajectory, acc_info.current_ego_pose,
+    acc_motion.stop_pose);
   acc_motion.use_trajectory = true;
 }
 
 TrajectoryPoints AccPidNode::insertStopPoint(
-  const double stop_distance, const TrajectoryPoints & trajectory_points,
-  geometry_msgs::msg::Pose & stop_pose)
+  const double stop_distance_from_ego, const TrajectoryPoints & trajectory_points,
+  const geometry_msgs::msg::Pose & ego_pose, geometry_msgs::msg::Pose & stop_pose)
 {
   TrajectoryPoints trajectory_with_stop_point = trajectory_points;
 
@@ -156,7 +157,12 @@ TrajectoryPoints AccPidNode::insertStopPoint(
     return trajectory_points;
   }
 
+  // calculate arc length from trajectory.front() to ego pose
+  const auto arc_length_to_ego = tier4_autoware_utils::calcSignedArcLength(
+    trajectory_points, trajectory_points.front().pose.position, ego_pose.position);
+
   // calulcate stop index and stop point
+  const double stop_distance = arc_length_to_ego + stop_distance_from_ego;
   double accumulated_length = 0;
   double insert_idx = 0;
   bool find_idx = false;
