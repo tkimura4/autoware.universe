@@ -54,9 +54,11 @@ void AdaptiveCruiseControlCore::calcInformationForAdaptiveCruise(
   dist_to_object -= (baselink2front_ + object.shape.dimensions.x / 2.0);
 
   // delay compensation ( add object's travling distance in the delay time )
-  const double delay_time = (rclcpp::Time(pose.header.stamp) - object_time).seconds();
-  const double running_distance_in_delay = delay_time * object_velocity_along_traj;
-  dist_to_object += running_distance_in_delay;
+  if (object_velocity_along_traj > acc_param_.object_stop_velocity_thresh) {
+    const double delay_time = (rclcpp::Time(pose.header.stamp) - object_time).seconds();
+    const double running_distance_in_delay = delay_time * object_velocity_along_traj;
+    dist_to_object += running_distance_in_delay;
+  }
 
   /* input acc information */
   if (acc_info_ptr_) {
