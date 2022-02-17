@@ -87,7 +87,7 @@ double AccPidNode::calcStoppingDistFromCurrentVel(const double current_velocity)
 {
   const double idling_travel_distance = current_velocity * acc_param_.breaking_delay_time;
   const double braking_distance =
-    (current_velocity * current_velocity) / (2.0 * acc_param_.stop_min_acceleration);
+    (current_velocity * current_velocity) / (2.0 * -acc_param_.stop_min_acceleration);
   return idling_travel_distance + braking_distance;
 }
 
