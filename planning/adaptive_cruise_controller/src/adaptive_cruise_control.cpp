@@ -551,6 +551,9 @@ bool AdaptiveCruiseControllerNode::isObjectVelocityHigh(const PredictedObject & 
 void AdaptiveCruiseControllerNode::publishDebugOutputWithNoTarget()
 {
   resetObjectTwistHistory();
+  if (prev_acc_info_) {
+    debug_node_ptr_->setDebugValues(DebugValues::TYPE::FLAG_CUTOUT_OBJECT, 1.0);
+  }
   prev_acc_info_.reset();
   debug_node_ptr_->clearMarker();
   const auto ego_twist_stamped =
@@ -586,7 +589,7 @@ void AdaptiveCruiseControllerNode::fillAndPublishDebugOutput(const PredictedObje
     current_objects_ptr_->header,
     target_object_abs_twist.kinematics.initial_twist_with_covariance.twist);
 
-  const auto cut_in_out = acc_info_ptr ? CUT_IN_OUT::NONE : detectCutInAndOut(*acc_info_ptr);
+  const auto cut_in_out = !acc_info_ptr ? CUT_IN_OUT::NONE : detectCutInAndOut(*acc_info_ptr);
 
   if (cut_in_out == CUT_IN_OUT::NONE) {
     obj_accel_ = calcAcc(obj_twist_stamped, prev_object_twist_, obj_accel_);
@@ -700,16 +703,15 @@ CUT_IN_OUT AdaptiveCruiseControllerNode::detectCutInAndOut(
     return CUT_IN_OUT::CUT_IN;
   }
 
-  const double dt = (this->now() - prev_acc_info_->info_time).seconds();
-
-  if (dt > acc_param_.reset_time_to_acc_state) {
-    // previous acc info is too old.
-    prev_acc_info_ = std::make_shared<AdaptiveCruiseInformation>(acc_info);
-    return CUT_IN_OUT::CUT_IN;
-  }
-
   const double d_dist =
     acc_info.current_distance_to_object - prev_acc_info_->current_distance_to_object;
+  prev_acc_info_ = std::make_shared<AdaptiveCruiseInformation>(acc_info);
+
+  const double dt = (this->now() - prev_acc_info_->info_time).seconds();
+  if (dt > acc_param_.reset_time_to_acc_state) {
+    // previous acc info is too old.
+    return CUT_IN_OUT::CUT_IN;
+  }
 
   if (d_dist > threshold_length) return CUT_IN_OUT::CUT_OUT;
   if (d_dist < -threshold_length) return CUT_IN_OUT::CUT_IN;
