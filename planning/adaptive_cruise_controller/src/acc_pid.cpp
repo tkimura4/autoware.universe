@@ -114,13 +114,15 @@ void AccPidNode::calculateTargetMotion(
   const double diff_distance_to_object =
     acc_info.current_distance_to_object - acc_info.ideal_distance_to_object;
   const double min_target_velocity = acc_param_.object_low_velocity_thresh;
-  double target_velocity =
-    acc_info.current_ego_velocity + acc_param_.p_term_in_velocity_pid * diff_distance_to_object;
+  const double additional_velocity = acc_param_.p_term_in_velocity_pid * diff_distance_to_object;
 
+  double target_velocity = acc_info.current_ego_velocity + additional_velocity;
   target_velocity = std::max(min_target_velocity, target_velocity);
   acc_motion.target_velocity = target_velocity;
-  // TODO(tkimura4) calculate accel and jerk depends on current diff distance
-  acc_motion.target_acceleration = acc_param_.acc_min_acceleration;
+
+  const double target_accleration =
+    -acc_param_.velocity_to_accleration_weight * additional_velocity;
+  acc_motion.target_acceleration = std::max(target_accleration, acc_param_.acc_min_acceleration);
   acc_motion.target_jerk = acc_param_.acc_min_jerk;
   acc_motion.use_target_motion = true;
 }

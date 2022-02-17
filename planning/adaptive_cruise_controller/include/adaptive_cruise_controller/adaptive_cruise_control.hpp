@@ -150,7 +150,7 @@ private:
   double calcAcc(
     const geometry_msgs::msg::TwistStamped & twist,
     std::shared_ptr<geometry_msgs::msg::TwistStamped> & prev_twist, const double prev_acc,
-    const double lowpass_gain = 0.8, const double timeout = 1.0);
+    const double lowpass_gain = 0.6, const double timeout = 1.0);
 
   void resetObjectTwistHistory();
   CUT_IN_OUT detectCutInAndOut(

@@ -59,7 +59,7 @@
            <options value_offset="0" value_scale="1.0" time_offset="0"/>
           </transform>
          </curve>
-         <curve name="/planning/scenario_planning/lane_driving/motion_planning/adaptive_cruise_controller/debug/debug_values/data.4" color="#17becf">
+         <curve name="/planning/scenario_planning/lane_driving/motion_planning/adaptive_cruise_controller/debug/debug_values/data.1" color="#17becf">
          <transform alias="current accleration" name="Scale/Offset">
            <options value_offset="0" value_scale="1.0" time_offset="0"/>
           </transform>

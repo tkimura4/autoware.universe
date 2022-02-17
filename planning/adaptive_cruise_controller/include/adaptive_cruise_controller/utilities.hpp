@@ -51,6 +51,7 @@ struct AccParam
   double object_stop_velocity_thresh;
   double object_velocity_hysteresis_margin;
   double reset_time_to_acc_state;
+  double velocity_to_accleration_weight;
   double acc_min_acceleration;
   double acc_min_jerk;
   double stop_min_acceleration;

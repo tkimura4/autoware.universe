@@ -49,6 +49,8 @@ AdaptiveCruiseControllerNode::AdaptiveCruiseControllerNode(const rclcpp::NodeOpt
   acc_param_.object_velocity_hysteresis_margin =
     declare_parameter("object_velocity_hysteresis_margin", 1.0);
   acc_param_.reset_time_to_acc_state = declare_parameter("reset_time_to_acc_state", 1.0);
+  acc_param_.velocity_to_accleration_weight =
+    declare_parameter("velocity_to_accleration_weight", 0.3);
   acc_param_.acc_min_acceleration = declare_parameter("acc_min_acceleration", -1.5);
   acc_param_.acc_min_jerk = declare_parameter("acc_min_jerk", -1.0);
   acc_param_.stop_min_acceleration = declare_parameter("stop_min_acceleration", -3.0);
@@ -670,10 +672,14 @@ double AdaptiveCruiseControllerNode::calcAcc(
   const double dt =
     (rclcpp::Time(twist.header.stamp) - rclcpp::Time(prev_twist->header.stamp)).seconds();
   const double dv = twist.twist.linear.x - prev_twist->twist.linear.x;
+  prev_twist = std::make_shared<geometry_msgs::msg::TwistStamped>(twist);
 
-  if (dt > timeout || dt <= 0.0) {
-    prev_twist = std::make_shared<geometry_msgs::msg::TwistStamped>(twist);
+  if (dt > timeout) {
     return 0.0;
+  }
+
+  if (dt <= 0.0) {
+    return prev_acc;
   }
 
   const double acc = dv / dt;
