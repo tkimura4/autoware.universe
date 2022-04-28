@@ -77,8 +77,6 @@ bool AvoidanceModule::isExecutionReady() const
   {
     DebugData debug;
     static_cast<void>(calcAvoidancePlanningData(debug));
-    debug_avoidance_msg_array_ptr_ =
-      std::make_shared<AvoidanceDebugMsgArray>(debug.avoidance_debug_msg_array);
   }
 
   if (current_state_ == BT::NodeStatus::RUNNING) {
@@ -95,8 +93,6 @@ BT::NodeStatus AvoidanceModule::updateState()
   DebugData debug;
   const auto avoid_data = calcAvoidancePlanningData(debug);
   const bool has_avoidance_target = !avoid_data.objects.empty();
-  debug_avoidance_msg_array_ptr_ =
-    std::make_shared<AvoidanceDebugMsgArray>(debug.avoidance_debug_msg_array);
   if (!is_plan_running && !has_avoidance_target) {
     current_state_ = BT::NodeStatus::SUCCESS;
   } else {
@@ -156,6 +152,9 @@ AvoidancePlanningData AvoidanceModule::calcAvoidancePlanningData(DebugData & deb
   data.objects = calcAvoidanceTargetObjects(data.current_lanelets, data.reference_path, debug);
 
   DEBUG_PRINT("target object size = %lu", data.objects.size());
+
+  debug_avoidance_msg_array_ptr_ =
+    std::make_shared<AvoidanceDebugMsgArray>(debug.avoidance_debug_msg_array);
 
   return data;
 }
@@ -2177,8 +2176,6 @@ BehaviorModuleOutput AvoidanceModule::planWaitingApproval()
   // we can execute the plan() since it handles the approval appropriately.
   BehaviorModuleOutput out = plan();
   out.path_candidate = std::make_shared<PathWithLaneId>(planCandidate());
-  debug_avoidance_msg_array_ptr_ =
-    std::make_shared<AvoidanceDebugMsgArray>(debug_data_.avoidance_debug_msg_array);
   return out;
 }
 
