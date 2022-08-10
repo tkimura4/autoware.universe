@@ -606,10 +606,13 @@ boost::optional<int64_t> getNearestLaneId(
 
   lanelet::ConstLanelets lanes;
   for (const auto & point : path.points) {
-    lanes.push_back(lanelet_map->laneletLayer.get(point.lane_ids.at(0)));
+    for (const auto & lane_id : point.lane_ids) {
+      lanes.push_back(lanelet_map->laneletLayer.get(lane_id));
+    }
   }
 
   lanelet::Lanelet closest_lane;
+  // TODO(rej55) deal with crossing paths
   if (lanelet::utils::query::getClosestLanelet(lanes, current_pose, &closest_lane)) {
     return closest_lane.id();
   }
@@ -630,13 +633,19 @@ std::vector<lanelet::ConstLanelet> getLaneletsOnPath(
   }
 
   // Add forward path lane_id
-  const size_t start_idx = nearest_segment_idx ? *nearest_segment_idx : 0;
-  for (size_t i = start_idx; i < path.points.size(); i++) {
+  bool after_nearest_lane_id = false;
+  for (size_t i = 0; i < path.points.size(); i++) {
     for (const int64_t lane_id : path.points.at(i).lane_ids) {
-      if (
-        std::find(unique_lane_ids.begin(), unique_lane_ids.end(), lane_id) ==
-        unique_lane_ids.end()) {
-        unique_lane_ids.emplace_back(lane_id);
+      if (nearest_lane_id && lane_id == *nearest_lane_id) {
+        after_nearest_lane_id = true;
+      }
+
+      if (!nearest_lane_id || after_nearest_lane_id) {
+        if (
+          std::find(unique_lane_ids.begin(), unique_lane_ids.end(), lane_id) ==
+          unique_lane_ids.end()) {
+          unique_lane_ids.emplace_back(lane_id);
+        }
       }
     }
   }

@@ -320,12 +320,20 @@ std::unordered_map<typename std::shared_ptr<const T>, lanelet::ConstLanelet> get
   }
 
   // Add forward path lane_id
-  const size_t start_idx = nearest_segment_idx ? *nearest_segment_idx + 1 : 0;
-  for (size_t i = start_idx; i < path.points.size(); i++) {
-    const int64_t lane_id = path.points.at(i).lane_ids.at(0);
-    if (
-      std::find(unique_lane_ids.begin(), unique_lane_ids.end(), lane_id) == unique_lane_ids.end()) {
-      unique_lane_ids.emplace_back(lane_id);
+  bool after_nearest_lane_id = false;
+  for (size_t i = 0; i < path.points.size(); i++) {
+    for (const int64_t lane_id : path.points.at(i).lane_ids) {
+      if (nearest_lane_id && lane_id == *nearest_lane_id) {
+        after_nearest_lane_id = true;
+      }
+
+      if (!nearest_lane_id || after_nearest_lane_id) {
+        if (
+          std::find(unique_lane_ids.begin(), unique_lane_ids.end(), lane_id) ==
+          unique_lane_ids.end()) {
+          unique_lane_ids.emplace_back(lane_id);
+        }
+      }
     }
   }
 
