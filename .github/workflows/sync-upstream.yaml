@@ -15,12 +15,12 @@ jobs:
           private_key: ${{ secrets.PRIVATE_KEY }}
 
       - name: Print warning for invalid branch name
-       if: ${{ inputs.target_branch  == 'tier4/main' }}
+       if: ${{ github.event.inputs.target_branch  == 'tier4/main' }}
        run: |
           echo This action cannot be performed on 'tier/main' branch
 
       - name: Run sync-branches
-        if: ${{ inputs.target_branch  != 'tier4/main' }}
+        if: ${{ github.event.inputs.target_branch  != 'tier4/main' }}
         uses: autowarefoundation/autoware-github-actions/sync-branches@v1
         with:
           token: ${{ steps.generate-token.outputs.token }}
