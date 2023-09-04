@@ -1,8 +1,6 @@
 name: sync-upstream
 
 on:
-  schedule:
-    - cron: 0 0 * * *
   workflow_dispatch:
 
 jobs:
@@ -20,7 +18,6 @@ jobs:
        if: ${{ inputs.target_branch  == 'tier4/main' }}
        run: |
           echo This action cannot be performed on 'tier/main' branch
-
 
       - name: Run sync-branches
         if: ${{ inputs.target_branch  != 'tier4/main' }}
