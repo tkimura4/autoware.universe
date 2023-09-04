@@ -7,13 +7,6 @@ jobs:
   sync-upstream:
     runs-on: ubuntu-latest
     steps:
-      - name: Generate token
-        id: generate-token
-        uses: tibdex/github-app-token@v1
-        with:
-          app_id: x
-          private_key: x
-
       - name: Print warning for invalid branch name
         if: ${{ github.event.inputs.target_branch  == 'tier4/main' }}
         run: |
