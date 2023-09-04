@@ -15,9 +15,9 @@ jobs:
           private_key: x
 
       - name: Print warning for invalid branch name
-       if: ${{ github.event.inputs.target_branch  == 'tier4/main' }}
-       run: |
-          echo This action cannot be performed on 'tier/main' branch
+        if: ${{ github.event.inputs.target_branch  == 'tier4/main' }}
+        run: |
+            echo This action cannot be performed on 'tier/main' branch
 
       - name: Run sync-branches
         if: ${{ github.event.inputs.target_branch  != 'tier4/main' }}
