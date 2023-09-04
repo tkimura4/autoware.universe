@@ -2,18 +2,23 @@ name: sync-upstream
 
 on:
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Target branch
+        required: true
+        type: string
 
 jobs:
   sync-upstream:
     runs-on: ubuntu-latest
     steps:
       - name: Print warning for invalid branch name
-        if: ${{ github.event.inputs.target_branch  == 'tier4/main' }}
+        if: ${{ inputs.target_branch  == 'tier4/main' }}
         run: |
             echo This action cannot be performed on 'tier/main' branch
 
       - name: Run sync-branches
-        if: ${{ github.event.inputs.target_branch  != 'tier4/main' }}
+        if: ${{ inputs.target_branch  != 'tier4/main' }}
         uses: autowarefoundation/autoware-github-actions/sync-branches@v1
         with:
           token: ${{ steps.generate-token.outputs.token }}
