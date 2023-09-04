@@ -16,11 +16,18 @@ jobs:
           app_id: ${{ secrets.APP_ID }}
           private_key: ${{ secrets.PRIVATE_KEY }}
 
+      - name: Print warning for invalid branch name
+       if: ${{ inputs.target_branch  == 'tier4/main' }}
+       run: |
+          echo This action cannot be performed on 'tier/main' branch
+
+
       - name: Run sync-branches
+        if: ${{ inputs.target_branch  != 'tier4/main' }}
         uses: autowarefoundation/autoware-github-actions/sync-branches@v1
         with:
           token: ${{ steps.generate-token.outputs.token }}
-          base-branch: tier4/main
+          base-branch: ${{ inputs.target_branch }}
           sync-pr-branch: sync-upstream
           sync-target-repository: https://github.com/autowarefoundation/autoware.universe.git
           sync-target-branch: main
